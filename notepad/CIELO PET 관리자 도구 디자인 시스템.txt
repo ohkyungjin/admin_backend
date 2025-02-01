@@ -1,0 +1,248 @@
+# CIELO PET 관리자 도구 디자인 시스템
+
+## 1. 디자인 원칙
+
+### 1.1 핵심 가치
+- **효율성 (Efficiency)**
+  * 최소한의 클릭으로 작업 완료
+  * 직관적인 정보 구조
+  * 빠른 데이터 접근성
+
+- **신뢰성 (Reliability)**
+  * 안정적인 시스템 이미지 전달
+  * 일관된 디자인 패턴
+  * 명확한 피드백 제공
+
+- **전문성 (Professionalism)**
+  * 체계적인 정보 구조
+  * 깔끔한 시각적 디자인
+  * 고급스러운 컬러 톤
+
+- **배려 (Consideration)**
+  * 사용자 실수 방지
+  * 편안한 시각적 경험
+  * 적절한 여백과 타이포그래피
+
+### 1.2 디자인 철학
+- **Clarity First**: 명확성을 최우선으로 하는 디자인
+- **Systematic Approach**: 체계적이고 일관된 시스템
+- **Emotional Balance**: 감성적 균형을 갖춘 인터페이스
+
+## 2. 브랜드 아이덴티티
+
+### 2.1 컬러 시스템
+- **Primary Colors**
+  * Deep Blue (#1E3A8A): 신뢰성과 전문성
+  * Soft Gray (#F3F4F6): 안정감과 깔끔함
+  * Gentle Green (#059669): 생명과 치유
+
+- **Secondary Colors**
+  * Light Blue (#BFDBFE): 보조 강조
+  * Warm Gray (#9CA3AF): 텍스트와 아이콘
+  * Subtle Green (#D1FAE5): 백그라운드 강조
+
+- **Status Colors**
+  * Success (#10B981): 완료, 성공
+  * Warning (#F59E0B): 주의, 경고
+  * Error (#EF4444): 오류, 실패
+  * Info (#3B82F6): 정보, 알림
+
+### 2.2 타이포그래피
+- **시스템 폰트**
+  * 한글: Pretendard
+  * 영문: Inter
+  * 숫자: Roboto Mono
+
+- **폰트 크기**
+  * Heading 1: 24px (1.5rem)
+  * Heading 2: 20px (1.25rem)
+  * Heading 3: 16px (1rem)
+  * Body: 14px (0.875rem)
+  * Small: 12px (0.75rem)
+
+- **폰트 두께**
+  * Regular: 400
+  * Medium: 500
+  * SemiBold: 600
+  * Bold: 700
+
+## 3. 컴포넌트 시스템
+
+### 3.1 레이아웃 컴포넌트
+- **Grid System**
+  * Desktop: 12 columns
+  * Tablet: 8 columns
+  * Mobile: 4 columns
+  * Gutter: 24px
+  * Margin: 32px
+
+- **Container**
+  * Max-width: 1440px
+  * Padding: 24px
+  * Background: White
+
+- **Card**
+  * Padding: 24px
+  * Border-radius: 8px
+  * Shadow: 0 2px 4px rgba(0,0,0,0.1)
+
+### 3.2 기본 컴포넌트
+
+#### Button
+- **Primary Button**
+  * Background: Deep Blue
+  * Text: White
+  * Height: 40px
+  * Padding: 16px 24px
+  * Border-radius: 6px
+
+- **Secondary Button**
+  * Background: White
+  * Border: 1px solid Deep Blue
+  * Text: Deep Blue
+  * Height: 40px
+
+- **Text Button**
+  * Color: Deep Blue
+  * Height: 32px
+  * Underline on hover
+
+#### Input Fields
+- **Text Input**
+  * Height: 40px
+  * Border: 1px solid Warm Gray
+  * Border-radius: 6px
+  * Padding: 8px 16px
+
+- **Select**
+  * Height: 40px
+  * Border: 1px solid Warm Gray
+  * Border-radius: 6px
+  * Dropdown icon: Custom
+
+- **Checkbox & Radio**
+  * Size: 16px
+  * Custom design
+  * Animated transitions
+
+### 3.3 복합 컴포넌트
+
+#### Data Display
+- **Table**
+  * Header: Light Blue background
+  * Row height: 48px
+  * Alternating row colors
+  * Hover state
+  * Sortable columns
+  * Pagination
+
+- **Calendar**
+  * Month/Week/Day views
+  * Event indicators
+  * Color coding by status
+  * Quick navigation
+  * Drag-and-drop support
+
+- **Dashboard Cards**
+  * Standardized metrics display
+  * Icon + Number + Label
+  * Trend indicators
+  * Interactive charts
+
+### 3.4 Navigation
+
+#### Top Navigation
+- **Header Bar**
+  * Height: 64px
+  * Fixed position
+  * Quick access controls
+  * User profile menu
+  * Notifications
+
+#### Side Navigation
+- **Sidebar**
+  * Width: 280px
+  * Collapsible
+  * Icon + Text labels
+  * Active state indicators
+  * Nested menus
+
+## 4. 모션 & 인터랙션
+
+### 4.1 트랜지션
+- **Duration**
+  * Quick: 150ms
+  * Normal: 250ms
+  * Slow: 350ms
+
+- **Easing**
+  * Standard: cubic-bezier(0.4, 0, 0.2, 1)
+  * Enter: cubic-bezier(0, 0, 0.2, 1)
+  * Exit: cubic-bezier(0.4, 0, 1, 1)
+
+### 4.2 애니메이션
+- **Loading States**
+  * Skeleton screens
+  * Progress indicators
+  * Smooth fade transitions
+
+- **Feedback**
+  * Success/Error animations
+  * Toast notifications
+  * Button states
+
+## 5. 반응형 디자인
+
+### 5.1 Breakpoints
+- **Desktop**: 1440px and above
+- **Laptop**: 1024px to 1439px
+- **Tablet**: 768px to 1023px
+- **Mobile**: Below 768px
+
+### 5.2 Responsive Behavior
+- **Layout Adaptation**
+  * Fluid grid system
+  * Stackable components
+  * Hidden/Visible elements
+  * Touch-friendly targets
+
+## 6. 접근성
+
+### 6.1 색상 접근성
+- WCAG 2.1 AA 기준 준수
+- 충분한 색상 대비
+- 색맹/색약자 고려
+
+### 6.2 키보드 접근성
+- 포커스 상태 명확히 표시
+- 논리적 탭 순서
+- 단축키 지원
+
+## 7. 아이콘 시스템
+
+### 7.1 기본 아이콘
+- **스타일**
+  * 선 두께: 1.5px
+  * 크기: 24x24px
+  * 라운드 코너: 2px
+
+### 7.2 상태 아이콘
+- **알림**
+  * 성공: 체크마크
+  * 경고: 느낌표
+  * 오류: X 표시
+  * 정보: i 마크
+
+## 8. 이미지 가이드라인
+
+### 8.1 일러스트레이션
+- **스타일**
+  * 미니멀한 라인 아트
+  * 브랜드 컬러 활용
+  * 감성적 터치
+
+### 8.2 사진
+- **품질 기준**
+  * 최소 해상도
+  * 밝기/대비 기준
+  * 크롭 가이드라인

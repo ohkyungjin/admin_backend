@@ -1,0 +1,173 @@
+-- 직원 테이블
+CREATE TABLE employee (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    auth_level INT NOT NULL DEFAULT 1,
+    last_password_change DATETIME NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_email (email),
+    INDEX idx_auth_level (auth_level)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 고객 테이블
+CREATE TABLE customer (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    email VARCHAR(100),
+    address TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_phone (phone),
+    INDEX idx_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 반려동물 테이블
+CREATE TABLE pet (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    customer_id INT NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    species VARCHAR(50) NOT NULL,
+    age INT,
+    special_notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customer(id),
+    INDEX idx_customer_id (customer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 추모실 테이블
+CREATE TABLE memorial_room (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50) NOT NULL,
+    capacity INT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'available',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 예약 테이블
+CREATE TABLE reservation (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    customer_id INT NOT NULL,
+    pet_id INT NOT NULL,
+    employee_id INT NOT NULL,
+    room_id INT NOT NULL,
+    reserved_at DATETIME NOT NULL,
+    funeral_time DATETIME NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    special_requests TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customer(id),
+    FOREIGN KEY (pet_id) REFERENCES pet(id),
+    FOREIGN KEY (employee_id) REFERENCES employee(id),
+    FOREIGN KEY (room_id) REFERENCES memorial_room(id),
+    INDEX idx_funeral_time (funeral_time),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 서비스 패키지 테이블
+CREATE TABLE service_package (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    base_price DECIMAL(10,2) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_is_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 서비스 아이템 테이블
+CREATE TABLE service_item (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    reservation_id INT NOT NULL,
+    package_id INT NOT NULL,
+    item_type VARCHAR(50) NOT NULL,
+    item_name VARCHAR(100) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (reservation_id) REFERENCES reservation(id),
+    FOREIGN KEY (package_id) REFERENCES service_package(id),
+    INDEX idx_reservation_id (reservation_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 재고 아이템 테이블
+CREATE TABLE inventory_item (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    current_stock INT NOT NULL DEFAULT 0,
+    minimum_stock INT NOT NULL DEFAULT 0,
+    unit_price DECIMAL(10,2) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_category (category),
+    INDEX idx_current_stock (current_stock)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 재고 로그 테이블
+CREATE TABLE inventory_log (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    item_id INT NOT NULL,
+    quantity INT NOT NULL,
+    action_type VARCHAR(20) NOT NULL,
+    action_date DATETIME NOT NULL,
+    employee_id INT NOT NULL,
+    notes TEXT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (item_id) REFERENCES inventory_item(id),
+    FOREIGN KEY (employee_id) REFERENCES employee(id),
+    INDEX idx_item_id (item_id),
+    INDEX idx_action_date (action_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 추모 페이지 테이블
+CREATE TABLE memorial_page (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    reservation_id INT NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    is_public BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (reservation_id) REFERENCES reservation(id),
+    INDEX idx_reservation_id (reservation_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 추모 콘텐츠 테이블
+CREATE TABLE memorial_content (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    page_id INT NOT NULL,
+    content_type VARCHAR(50) NOT NULL,
+    content TEXT NOT NULL,
+    display_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (page_id) REFERENCES memorial_page(id),
+    INDEX idx_page_id (page_id),
+    INDEX idx_display_order (display_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 활동 로그 테이블
+CREATE TABLE activity_log (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    employee_id INT NOT NULL,
+    action_type VARCHAR(50) NOT NULL,
+    description TEXT NOT NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    action_time DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employee(id),
+    INDEX idx_employee_id (employee_id),
+    INDEX idx_action_time (action_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

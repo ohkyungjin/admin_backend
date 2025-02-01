@@ -1,0 +1,296 @@
+# CIELO PET 관리자 도구 API 명세서
+
+## 1. API 개요
+
+### 1.1 기본 정보
+- 기본 URL: `https://api.cielopet.com/v1`
+- 응답 형식: JSON
+- 문자 인코딩: UTF-8
+- 시간 형식: ISO 8601 (YYYY-MM-DDTHH:mm:ssZ)
+
+### 1.2 인증
+- JWT(JSON Web Token) 기반 인증
+- 토큰 유효기간: 1시간
+- 리프레시 토큰 유효기간: 2주
+- Authorization 헤더에 Bearer 토큰 포함
+
+### 1.3 에러 응답 형식
+```json
+{
+    "error": {
+        "code": "ERROR_CODE",
+        "message": "에러 메시지",
+        "details": "상세 에러 정보"
+    }
+}
+```
+
+## 2. API 엔드포인트
+
+### 2.1 인증 API (/auth)
+
+#### 2.1.1 로그인
+- 엔드포인트: POST /auth/login
+- 설명: 사용자 로그인 및 토큰 발급
+- 요청:
+```json
+{
+    "email": "string",
+    "password": "string"
+}
+```
+- 응답:
+```json
+{
+    "access_token": "string",
+    "refresh_token": "string",
+    "expires_in": 3600
+}
+```
+
+#### 2.1.2 토큰 갱신
+- 엔드포인트: POST /auth/refresh
+- 설명: 액세스 토큰 갱신
+- 요청:
+```json
+{
+    "refresh_token": "string"
+}
+```
+- 응답:
+```json
+{
+    "access_token": "string",
+    "expires_in": 3600
+}
+```
+
+### 2.2 예약 관리 API (/reservations)
+
+#### 2.2.1 예약 목록 조회
+- 엔드포인트: GET /reservations
+- 설명: 예약 목록 조회 (페이징, 필터링 지원)
+- 파라미터:
+  * page: 페이지 번호 (기본값: 1)
+  * limit: 페이지당 항목 수 (기본값: 20)
+  * status: 예약 상태
+  * date_from: 시작일
+  * date_to: 종료일
+- 응답:
+```json
+{
+    "total": 100,
+    "page": 1,
+    "limit": 20,
+    "items": [
+        {
+            "id": 1,
+            "customer": {
+                "id": 1,
+                "name": "string",
+                "phone": "string"
+            },
+            "pet": {
+                "id": 1,
+                "name": "string",
+                "species": "string"
+            },
+            "reserved_at": "datetime",
+            "funeral_time": "datetime",
+            "status": "string",
+            "total_amount": "decimal"
+        }
+    ]
+}
+```
+
+#### 2.2.2 예약 상세 조회
+- 엔드포인트: GET /reservations/{id}
+- 설명: 특정 예약의 상세 정보 조회
+- 응답:
+```json
+{
+    "id": 1,
+    "customer": {
+        "id": 1,
+        "name": "string",
+        "phone": "string",
+        "email": "string",
+        "address": "string"
+    },
+    "pet": {
+        "id": 1,
+        "name": "string",
+        "species": "string",
+        "age": "integer",
+        "special_notes": "string"
+    },
+    "reserved_at": "datetime",
+    "funeral_time": "datetime",
+    "status": "string",
+    "total_amount": "decimal",
+    "special_requests": "string",
+    "service_items": [
+        {
+            "id": 1,
+            "type": "string",
+            "name": "string",
+            "price": "decimal"
+        }
+    ],
+    "memorial_room": {
+        "id": 1,
+        "name": "string",
+        "capacity": "integer"
+    }
+}
+```
+
+#### 2.2.3 예약 생성
+- 엔드포인트: POST /reservations
+- 설명: 새로운 예약 생성
+- 요청:
+```json
+{
+    "customer_id": "integer",
+    "pet_id": "integer",
+    "funeral_time": "datetime",
+    "room_id": "integer",
+    "package_id": "integer",
+    "additional_services": [
+        {
+            "service_id": "integer",
+            "quantity": "integer"
+        }
+    ],
+    "special_requests": "string"
+}
+```
+
+### 2.3 재고 관리 API (/inventory)
+
+#### 2.3.1 재고 목록 조회
+- 엔드포인트: GET /inventory/items
+- 설명: 재고 목록 조회
+- 파라미터:
+  * category: 품목 카테고리
+  * below_minimum: 최소 재고 미만 여부
+- 응답:
+```json
+{
+    "items": [
+        {
+            "id": 1,
+            "name": "string",
+            "category": "string",
+            "current_stock": "integer",
+            "minimum_stock": "integer",
+            "unit_price": "decimal"
+        }
+    ]
+}
+```
+
+#### 2.3.2 재고 입출고 기록
+- 엔드포인트: POST /inventory/logs
+- 설명: 재고 입출고 기록 생성
+- 요청:
+```json
+{
+    "item_id": "integer",
+    "quantity": "integer",
+    "action_type": "string", // "in" or "out"
+    "notes": "string"
+}
+```
+
+### 2.4 장례 서비스 API (/services)
+
+#### 2.4.1 서비스 패키지 목록
+- 엔드포인트: GET /services/packages
+- 설명: 서비스 패키지 목록 조회
+- 응답:
+```json
+{
+    "packages": [
+        {
+            "id": 1,
+            "name": "string",
+            "description": "string",
+            "base_price": "decimal",
+            "included_items": [
+                {
+                    "id": 1,
+                    "name": "string",
+                    "description": "string"
+                }
+            ]
+        }
+    ]
+}
+```
+
+### 2.5 추모 관리 API (/memorials)
+
+#### 2.5.1 추모 페이지 생성
+- 엔드포인트: POST /memorials/pages
+- 설명: 새로운 추모 페이지 생성
+- 요청:
+```json
+{
+    "reservation_id": "integer",
+    "title": "string",
+    "description": "string",
+    "is_public": "boolean"
+}
+```
+
+#### 2.5.2 추모 콘텐츠 관리
+- 엔드포인트: POST /memorials/pages/{page_id}/contents
+- 설명: 추모 페이지에 콘텐츠 추가
+- 요청:
+```json
+{
+    "content_type": "string", // "text", "image", "video"
+    "content": "string",
+    "display_order": "integer"
+}
+```
+
+## 3. 미들웨어
+
+### 3.1 인증 미들웨어
+- 모든 API 요청에 대해 JWT 토큰 검증
+- 권한 레벨에 따른 접근 제어
+
+### 3.2 로깅 미들웨어
+- 모든 API 요청/응답 로깅
+- 에러 발생 시 상세 정보 기록
+
+### 3.3 데이터 검증 미들웨어
+- 요청 데이터 유효성 검증
+- JSON 스키마 기반 검증
+
+## 4. API 보안
+
+### 4.1 rate limiting
+- IP 기반 요청 제한: 1000회/시간
+- 계정 기반 요청 제한: 10000회/일
+
+### 4.2 CORS 정책
+- 허용된 도메인만 접근 가능
+- OPTIONS 요청 처리
+
+### 4.3 데이터 암호화
+- 중요 데이터 AES-256 암호화
+- HTTPS 통신 필수
+
+## 5. API 버전 관리
+
+### 5.1 버전 체계
+- Major.Minor 형식 (v1.0)
+- 하위 호환성 보장
+
+### 5.2 버전 변경 정책
+- Breaking Changes: Major 버전 증가
+- 기능 추가: Minor 버전 증가

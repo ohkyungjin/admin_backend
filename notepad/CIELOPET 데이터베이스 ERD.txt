@@ -1,0 +1,142 @@
+erDiagram
+    EMPLOYEE ||--o{ RESERVATION : manages
+    EMPLOYEE ||--o{ ACTIVITY_LOG : creates
+    EMPLOYEE {
+        int id PK
+        varchar email
+        varchar password_hash
+        varchar name
+        varchar phone
+        int auth_level
+        datetime last_password_change
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+    }
+
+    CUSTOMER ||--o{ RESERVATION : makes
+    CUSTOMER ||--o{ PET : owns
+    CUSTOMER {
+        int id PK
+        varchar name
+        varchar phone
+        varchar email
+        varchar address
+        datetime created_at
+        datetime updated_at
+    }
+
+    PET ||--o{ RESERVATION : subject_of
+    PET {
+        int id PK
+        int customer_id FK
+        varchar name
+        varchar species
+        int age
+        text special_notes
+        datetime created_at
+        datetime updated_at
+    }
+
+    RESERVATION ||--o{ SERVICE_ITEM : includes
+    RESERVATION {
+        int id PK
+        int customer_id FK
+        int pet_id FK
+        int employee_id FK
+        int room_id FK
+        datetime reserved_at
+        datetime funeral_time
+        varchar status
+        decimal total_amount
+        text special_requests
+        datetime created_at
+        datetime updated_at
+    }
+
+    MEMORIAL_ROOM ||--o{ RESERVATION : used_in
+    MEMORIAL_ROOM {
+        int id PK
+        varchar name
+        int capacity
+        varchar status
+        datetime created_at
+        datetime updated_at
+    }
+
+    SERVICE_PACKAGE ||--o{ SERVICE_ITEM : contains
+    SERVICE_PACKAGE {
+        int id PK
+        varchar name
+        text description
+        decimal base_price
+        boolean is_active
+        datetime created_at
+        datetime updated_at
+    }
+
+    SERVICE_ITEM {
+        int id PK
+        int reservation_id FK
+        int package_id FK
+        varchar item_type
+        varchar item_name
+        decimal price
+        datetime created_at
+        datetime updated_at
+    }
+
+    INVENTORY_ITEM ||--o{ SERVICE_ITEM : used_in
+    INVENTORY_ITEM {
+        int id PK
+        varchar name
+        varchar category
+        int current_stock
+        int minimum_stock
+        decimal unit_price
+        datetime created_at
+        datetime updated_at
+    }
+
+    INVENTORY_LOG ||--o{ INVENTORY_ITEM : records
+    INVENTORY_LOG {
+        int id PK
+        int item_id FK
+        int quantity
+        varchar action_type
+        datetime action_date
+        int employee_id FK
+        text notes
+        datetime created_at
+    }
+
+    MEMORIAL_PAGE ||--o{ MEMORIAL_CONTENT : contains
+    MEMORIAL_PAGE {
+        int id PK
+        int reservation_id FK
+        varchar title
+        text description
+        boolean is_public
+        datetime created_at
+        datetime updated_at
+    }
+
+    MEMORIAL_CONTENT {
+        int id PK
+        int page_id FK
+        varchar content_type
+        text content
+        int display_order
+        datetime created_at
+        datetime updated_at
+    }
+
+    ACTIVITY_LOG {
+        int id PK
+        int employee_id FK
+        varchar action_type
+        text description
+        varchar ip_address
+        datetime action_time
+        datetime created_at
+    }

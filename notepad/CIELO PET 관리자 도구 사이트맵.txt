@@ -1,0 +1,33 @@
+graph TB
+    Login[로그인] --> Dashboard[대시보드]
+    
+    Dashboard --> Reservation[예약 관리]
+    Dashboard --> Inventory[재고 관리]
+    Dashboard --> Service[장례 서비스]
+    Dashboard --> Memorial[추모 관리]
+    Dashboard --> System[시스템 관리]
+    
+    Reservation --> R1[예약 현황]
+    Reservation --> R2[예약 등록]
+    Reservation --> R3[일정 관리]
+    Reservation --> R4[추모실 관리]
+    
+    Inventory --> I1[재고 현황]
+    Inventory --> I2[입출고 관리]
+    Inventory --> I3[발주 관리]
+    Inventory --> I4[공급업체 관리]
+    
+    Service --> S1[서비스 패키지]
+    Service --> S2[장례 진행 현황]
+    Service --> S3[정산 관리]
+    Service --> S4[체크리스트]
+    
+    Memorial --> M1[추모 페이지]
+    Memorial --> M2[콘텐츠 관리]
+    Memorial --> M3[온라인 추모식]
+    Memorial --> M4[기일 관리]
+    
+    System --> Sys1[직원 관리]
+    System --> Sys2[권한 관리]
+    System --> Sys3[로그 관리]
+    System --> Sys4[환경설정]
