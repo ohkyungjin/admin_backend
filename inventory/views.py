@@ -8,7 +8,7 @@ from django.db.models import F
 from django.utils import timezone
 from .models import (
     Category, Supplier, InventoryItem, StockMovement,
-    PurchaseOrder, PurchaseOrderItem
+    PurchaseOrder, PurchaseOrderItem, PurchaseOrderHistory
 )
 from .serializers import (
     CategorySerializer, SupplierSerializer, InventoryItemSerializer,
@@ -16,6 +16,7 @@ from .serializers import (
     PurchaseOrderDetailSerializer, PurchaseOrderCreateSerializer,
     PurchaseOrderUpdateSerializer, PurchaseOrderItemSerializer
 )
+from utils.telegram import send_telegram_message, format_purchase_order_message
 import logging
 from django.db import transaction
 
@@ -33,7 +34,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
+            instance = self.perform_create(serializer)
             logger.info(f"Successfully created category: {serializer.data.get('name')}")
             return Response(
                 {
@@ -125,7 +126,7 @@ class SupplierViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
+            instance = self.perform_create(serializer)
             logger.info(f"Successfully created supplier: {serializer.data.get('name')}")
             return Response(
                 {
@@ -218,7 +219,7 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
+            instance = self.perform_create(serializer)
             logger.info(f"Successfully created inventory item: {serializer.data.get('name')}")
             return Response(
                 {
@@ -387,7 +388,7 @@ class StockMovementViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
+            instance = self.perform_create(serializer)
             logger.info(f"Successfully created stock movement: {serializer.data.get('reference_number')}")
             return Response(
                 {
@@ -480,35 +481,79 @@ class StockMovementViewSet(viewsets.ModelViewSet):
 
 class PurchaseOrderViewSet(viewsets.ModelViewSet):
     queryset = PurchaseOrder.objects.all()
+    serializer_class = PurchaseOrderDetailSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['status', 'supplier']
-    search_fields = ['order_number', 'notes']
+    search_fields = ['order_number']
+
+    def get_queryset(self):
+        logger = logging.getLogger(__name__)
+        logger.debug("Getting purchase orders queryset")
+        
+        queryset = super().get_queryset()
+        queryset = queryset.select_related(
+            'supplier', 'created_by', 'approved_by', 
+            'ordered_by', 'received_by'
+        ).prefetch_related('items', 'items__item', 'histories')
+        
+        logger.debug(f"Queryset SQL: {str(queryset.query)}")
+        return queryset
 
     def get_serializer_class(self):
-        if self.action == 'list':
-            return PurchaseOrderListSerializer
-        elif self.action == 'create':
+        if self.action == 'create':
             return PurchaseOrderCreateSerializer
-        elif self.action in ['update', 'partial_update']:
+        elif self.action == 'update' or self.action == 'partial_update':
             return PurchaseOrderUpdateSerializer
-        return PurchaseOrderDetailSerializer
+        return self.serializer_class
 
     def list(self, request, *args, **kwargs):
         logger = logging.getLogger(__name__)
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            response_data = self.get_paginated_response(serializer.data)
-            logger.info(f"Purchase orders list response: {response_data.data}")
-            return response_data
+        try:
+            logger.debug("Processing purchase orders list request")
+            logger.debug(f"Query params: {request.query_params}")
             
-        serializer = self.get_serializer(queryset, many=True)
-        response_data = Response(serializer.data)
-        logger.info(f"Purchase orders list response: {response_data.data}")
-        return response_data
+            queryset = self.filter_queryset(self.get_queryset())
+            
+            # id와 include_details가 있으면 상세 정보를 반환
+            order_id = request.query_params.get('id')
+            include_details = request.query_params.get('include_details') == 'true'
+            
+            if order_id and include_details:
+                try:
+                    instance = queryset.get(id=order_id)
+                    serializer = PurchaseOrderDetailSerializer(instance)
+                    return Response(serializer.data)
+                except PurchaseOrder.DoesNotExist:
+                    return Response(
+                        {"message": "발주서를 찾을 수 없습니다."},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            
+            # 일반 목록 조회
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = PurchaseOrderListSerializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = PurchaseOrderListSerializer(queryset, many=True)
+            return Response(serializer.data)
+            
+        except Exception as e:
+            logger.error(f"Error in list view: {str(e)}", exc_info=True)
+            return Response(
+                {
+                    "status": "error",
+                    "message": "발주서 목록을 조회하는 중 오류가 발생했습니다.",
+                    "error_details": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def perform_create(self, serializer):
+        logger = logging.getLogger(__name__)
+        instance = serializer.save(created_by=self.request.user)
+        return instance
 
     def create(self, request, *args, **kwargs):
         logger = logging.getLogger(__name__)
@@ -517,13 +562,18 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
-            logger.info(f"Successfully created purchase order: {serializer.data.get('order_number')}")
+            instance = self.perform_create(serializer)
+            
+            # 텔레그램 알림 발송
+            message = format_purchase_order_message(instance, 'created')
+            send_telegram_message(message)
+            
+            logger.info(f"Successfully created purchase order: {instance.order_number}")
             return Response(
                 {
                     "status": "success",
                     "message": "발주서가 성공적으로 생성되었습니다.",
-                    "data": serializer.data
+                    "data": PurchaseOrderDetailSerializer(instance).data
                 },
                 status=status.HTTP_201_CREATED
             )
@@ -580,35 +630,131 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        logger = logging.getLogger(__name__)
         instance = self.get_object()
-        logger.info(f"Purchase order deletion attempt for: {instance.order_number}")
+        logger = logging.getLogger(__name__)
         
+        logger.info(f"Attempting to delete purchase order: {instance.order_number}")
+        
+        if instance.status not in ['draft', 'cancelled']:
+            return Response(
+                {
+                    "status": "error",
+                    "message": "임시저장 또는 취소된 발주서만 삭제할 수 있습니다.",
+                    "current_status": instance.get_status_display()
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
         try:
-            self.perform_destroy(instance)
+            # 텔레그램 알림 발송
+            message = format_purchase_order_message(instance, 'cancelled')
+            send_telegram_message(message)
+            
+            instance.delete()
+            
             logger.info(f"Successfully deleted purchase order: {instance.order_number}")
+            
             return Response(
                 {
                     "status": "success",
-                    "message": "발주서가 성공적으로 삭제되었습니다."
+                    "message": "발주서가 삭제되었습니다."
                 },
                 status=status.HTTP_204_NO_CONTENT
             )
         except Exception as e:
-            logger.error(f"Failed to delete purchase order. Error: {str(e)}")
+            logger.error(f"Failed to delete purchase order {instance.order_number}. Error: {str(e)}")
             return Response(
                 {
                     "status": "error",
-                    "message": "발주서 삭제 중 오류가 발생했습니다.",
+                    "message": "삭제 중 오류가 발생했습니다.",
                     "error_details": str(e)
                 },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _record_status_change(self, instance, from_status, to_status, notes=''):
+        change_mapping = {
+            ('draft', 'pending'): 'draft_to_pending',
+            ('pending', 'approved'): 'pending_to_approved',
+            ('approved', 'ordered'): 'approved_to_ordered',
+            ('ordered', 'received'): 'ordered_to_received',
+        }
+        
+        # 취소 상태로 변경되는 경우
+        if to_status == 'cancelled':
+            change_type = 'to_cancelled'
+        else:
+            change_type = change_mapping.get((from_status, to_status))
+            
+        if not change_type:
+            return
+            
+        PurchaseOrderHistory.objects.create(
+            purchase_order=instance,
+            from_status=from_status,
+            to_status=to_status,
+            change_type=change_type,
+            changed_by=self.request.user,
+            notes=notes
+        )
+
+    @action(detail=True, methods=['post'])
+    def pending(self, request, pk=None):
+        instance = self.get_object()
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"Attempting to change purchase order to pending status: {instance.order_number}")
+        
+        if instance.status != 'draft':
+            return Response(
+                {
+                    "status": "error",
+                    "message": "임시저장 상태의 발주서만 승인 요청할 수 있습니다.",
+                    "current_status": instance.get_status_display()
+                },
                 status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            from_status = instance.status
+            instance.status = 'pending'
+            instance.save()
+            
+            self._record_status_change(instance, from_status, 'pending')
+            
+            # 텔레그램 알림 발송
+            message = format_purchase_order_message(instance, 'pending')
+            send_telegram_message(message)
+            
+            logger.info(f"Successfully changed purchase order to pending status: {instance.order_number}")
+            
+            return Response(
+                {
+                    "status": "success",
+                    "message": "발주서가 승인 요청되었습니다.",
+                    "data": {
+                        "id": instance.id,
+                        "order_number": instance.order_number,
+                        "status": instance.status,
+                        "status_display": instance.get_status_display()
+                    }
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to change purchase order to pending status {instance.order_number}. Error: {str(e)}")
+            return Response(
+                {
+                    "status": "error",
+                    "message": "승인 요청 중 오류가 발생했습니다.",
+                    "error_details": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        logger = logging.getLogger(__name__)
         instance = self.get_object()
+        logger = logging.getLogger(__name__)
         
         logger.info(f"Attempting to approve purchase order: {instance.order_number}")
         
@@ -616,25 +762,37 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "status": "error",
-                    "message": "승인 대기 상태의 발주서만 승인할 수 있습니다.",
+                    "message": "승인대기 상태의 발주서만 승인할 수 있습니다.",
                     "current_status": instance.get_status_display()
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         try:
+            from_status = instance.status
             instance.status = 'approved'
             instance.approved_by = request.user
             instance.approved_at = timezone.now()
             instance.save()
+            
+            self._record_status_change(instance, from_status, 'approved')
+            
+            # 텔레그램 알림 발송
+            message = format_purchase_order_message(instance, 'approved')
+            send_telegram_message(message)
             
             logger.info(f"Successfully approved purchase order: {instance.order_number}")
             
             return Response(
                 {
                     "status": "success",
-                    "message": "발주서가 성공적으로 승인되었습니다.",
-                    "data": PurchaseOrderDetailSerializer(instance).data
+                    "message": "발주서가 승인되었습니다.",
+                    "data": {
+                        "id": instance.id,
+                        "order_number": instance.order_number,
+                        "status": instance.status,
+                        "status_display": instance.get_status_display()
+                    }
                 }
             )
         except Exception as e:
@@ -642,7 +800,62 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "status": "error",
-                    "message": "발주서 승인 중 오류가 발생했습니다.",
+                    "message": "승인 중 오류가 발생했습니다.",
+                    "error_details": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
+    def order(self, request, pk=None):
+        instance = self.get_object()
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"Attempting to order purchase order: {instance.order_number}")
+        
+        if instance.status != 'approved':
+            return Response(
+                {
+                    "status": "error",
+                    "message": "승인완료 상태의 발주서만 발주할 수 있습니다.",
+                    "current_status": instance.get_status_display()
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            from_status = instance.status
+            instance.status = 'ordered'
+            instance.ordered_by = request.user
+            instance.ordered_at = timezone.now()
+            instance.save()
+            
+            self._record_status_change(instance, from_status, 'ordered')
+            
+            # 텔레그램 알림 발송
+            message = format_purchase_order_message(instance, 'ordered')
+            send_telegram_message(message)
+            
+            logger.info(f"Successfully ordered purchase order: {instance.order_number}")
+            
+            return Response(
+                {
+                    "status": "success",
+                    "message": "발주서가 발주되었습니다.",
+                    "data": {
+                        "id": instance.id,
+                        "order_number": instance.order_number,
+                        "status": instance.status,
+                        "status_display": instance.get_status_display()
+                    }
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to order purchase order {instance.order_number}. Error: {str(e)}")
+            return Response(
+                {
+                    "status": "error",
+                    "message": "발주 중 오류가 발생했습니다.",
                     "error_details": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -650,23 +863,21 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def receive(self, request, pk=None):
-        logger = logging.getLogger(__name__)
         instance = self.get_object()
-        
-        logger.info(f"Attempting to mark purchase order as received: {instance.order_number}")
         
         if instance.status != 'ordered':
             return Response(
                 {
                     "status": "error",
-                    "message": "발주 처리된 발주서만 입고 완료 처리할 수 있습니다.",
+                    "message": "발주완료 상태의 발주서만 입고할 수 있습니다.",
                     "current_status": instance.get_status_display()
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         try:
-            # 트랜잭션으로 처리하여 데이터 일관성 보장
+            from_status = instance.status
+            
             with transaction.atomic():
                 # 재고 수량 업데이트
                 for item in instance.items.all():
@@ -687,25 +898,30 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 
                 # 발주서 상태 업데이트
                 instance.status = 'received'
-                instance.received_at = timezone.now()
                 instance.received_by = request.user
+                instance.received_at = timezone.now()
                 instance.save()
-            
-            logger.info(f"Successfully marked purchase order as received: {instance.order_number}")
+                
+                # 상태 변경 이력 기록
+                self._record_status_change(instance, from_status, 'received')
             
             return Response(
                 {
                     "status": "success",
-                    "message": "발주서가 성공적으로 입고 완료 처리되었습니다.",
-                    "data": PurchaseOrderDetailSerializer(instance).data
+                    "message": "발주서가 입고되었습니다.",
+                    "data": {
+                        "id": instance.id,
+                        "order_number": instance.order_number,
+                        "status": instance.status,
+                        "status_display": instance.get_status_display()
+                    }
                 }
             )
         except Exception as e:
-            logger.error(f"Failed to mark purchase order as received {instance.order_number}. Error: {str(e)}")
             return Response(
                 {
                     "status": "error",
-                    "message": "입고 완료 처리 중 오류가 발생했습니다.",
+                    "message": "입고 중 오류가 발생했습니다.",
                     "error_details": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -713,39 +929,44 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
-        logger = logging.getLogger(__name__)
         instance = self.get_object()
+        logger = logging.getLogger(__name__)
         
         logger.info(f"Attempting to cancel purchase order: {instance.order_number}")
         
-        if instance.status == 'cancelled':
+        if instance.status in ['received', 'cancelled']:
             return Response(
                 {
                     "status": "error",
-                    "message": "이미 취소된 발주서입니다."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        if instance.status == 'received':
-            return Response(
-                {
-                    "status": "error",
-                    "message": "입고 완료된 발주서는 취소할 수 없습니다."
+                    "message": "입고완료 또는 취소된 발주서는 취소할 수 없습니다.",
+                    "current_status": instance.get_status_display()
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         try:
+            from_status = instance.status
             instance.status = 'cancelled'
             instance.save()
+            
+            self._record_status_change(instance, from_status, 'cancelled')
+            
+            # 텔레그램 알림 발송
+            message = format_purchase_order_message(instance, 'cancelled')
+            send_telegram_message(message)
+            
             logger.info(f"Successfully cancelled purchase order: {instance.order_number}")
             
             return Response(
                 {
                     "status": "success",
-                    "message": "발주서가 성공적으로 취소되었습니다.",
-                    "data": PurchaseOrderDetailSerializer(instance).data
+                    "message": "발주서가 취소되었습니다.",
+                    "data": {
+                        "id": instance.id,
+                        "order_number": instance.order_number,
+                        "status": instance.status,
+                        "status_display": instance.get_status_display()
+                    }
                 }
             )
         except Exception as e:
@@ -753,90 +974,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "status": "error",
-                    "message": "발주서 취소 중 오류가 발생했습니다.",
-                    "error_details": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=True, methods=['post'])
-    def order(self, request, pk=None):
-        logger = logging.getLogger(__name__)
-        instance = self.get_object()
-        
-        logger.info(f"Attempting to process order for purchase order: {instance.order_number}")
-        
-        if instance.status != 'approved':
-            return Response(
-                {
-                    "status": "error",
-                    "message": "승인된 발주서만 발주 처리할 수 있습니다.",
-                    "current_status": instance.get_status_display()
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        try:
-            instance.status = 'ordered'
-            instance.order_date = timezone.now().date()
-            instance.save()
-            
-            logger.info(f"Successfully processed order for purchase order: {instance.order_number}")
-            
-            return Response(
-                {
-                    "status": "success",
-                    "message": "발주서가 성공적으로 발주 처리되었습니다.",
-                    "data": PurchaseOrderDetailSerializer(instance).data
-                }
-            )
-        except Exception as e:
-            logger.error(f"Failed to process order for purchase order {instance.order_number}. Error: {str(e)}")
-            return Response(
-                {
-                    "status": "error",
-                    "message": "발주 처리 중 오류가 발생했습니다.",
-                    "error_details": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-    @action(detail=True, methods=['post'])
-    def pending(self, request, pk=None):
-        logger = logging.getLogger(__name__)
-        instance = self.get_object()
-        
-        logger.info(f"Attempting to change purchase order to pending status: {instance.order_number}")
-        
-        if instance.status != 'draft':
-            return Response(
-                {
-                    "status": "error",
-                    "message": "임시저장 상태의 발주서만 승인 요청할 수 있습니다.",
-                    "current_status": instance.get_status_display()
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-            
-        try:
-            instance.status = 'pending'
-            instance.save()
-            
-            logger.info(f"Successfully changed purchase order to pending status: {instance.order_number}")
-            
-            return Response(
-                {
-                    "status": "success",
-                    "message": "발주서가 성공적으로 승인 요청되었습니다.",
-                    "data": PurchaseOrderDetailSerializer(instance).data
-                }
-            )
-        except Exception as e:
-            logger.error(f"Failed to change purchase order to pending status {instance.order_number}. Error: {str(e)}")
-            return Response(
-                {
-                    "status": "error",
-                    "message": "승인 요청 중 오류가 발생했습니다.",
+                    "message": "취소 중 오류가 발생했습니다.",
                     "error_details": str(e)
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

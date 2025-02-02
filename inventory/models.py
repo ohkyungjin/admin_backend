@@ -103,26 +103,53 @@ class PurchaseOrder(models.Model):
         ('cancelled', '취소'),
     ]
 
-    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='purchase_orders')
     order_number = models.CharField(_('발주번호'), max_length=50, unique=True)
+    supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='purchase_orders')
+    order_date = models.DateField(_('발주일'), auto_now_add=True)
+    expected_date = models.DateField(_('예상 입고일'), null=True, blank=True)
     status = models.CharField(_('상태'), max_length=20, choices=ORDER_STATUS, default='draft')
-    order_date = models.DateField(_('발주일'), null=True, blank=True)
-    expected_date = models.DateField(_('입고예정일'), null=True, blank=True)
     total_amount = models.DecimalField(_('총 금액'), max_digits=12, decimal_places=2, default=0)
     notes = models.TextField(_('비고'), blank=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='created_orders')
-    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name='approved_orders')
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='created_purchase_orders'
+    )
     created_at = models.DateTimeField(_('생성일'), auto_now_add=True)
     updated_at = models.DateTimeField(_('수정일'), auto_now=True)
+
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='approved_purchase_orders',
+        null=True,
+        blank=True
+    )
+    approved_at = models.DateTimeField(_('승인일'), null=True, blank=True)
+
+    ordered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='ordered_purchase_orders',
+        null=True,
+        blank=True
+    )
+    ordered_at = models.DateTimeField(_('발주일'), null=True, blank=True)
+
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='received_purchase_orders',
+        null=True,
+        blank=True
+    )
+    received_at = models.DateTimeField(_('입고일'), null=True, blank=True)
 
     class Meta:
         verbose_name = _('발주서')
         verbose_name_plural = _('발주서 목록')
         ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['order_number']),
-            models.Index(fields=['status', 'order_date']),
-        ]
 
     def __str__(self):
         return f"{self.order_number} ({self.get_status_display()})"
@@ -144,3 +171,38 @@ class PurchaseOrderItem(models.Model):
 
     def __str__(self):
         return f"{self.item.name} ({self.quantity})"
+
+
+class PurchaseOrderHistory(models.Model):
+    STATUS_CHANGES = [
+        ('draft_to_pending', '임시저장 → 승인대기'),
+        ('pending_to_approved', '승인대기 → 승인완료'),
+        ('approved_to_ordered', '승인완료 → 발주완료'),
+        ('ordered_to_received', '발주완료 → 입고완료'),
+        ('to_cancelled', '취소'),
+    ]
+
+    purchase_order = models.ForeignKey(
+        'PurchaseOrder',
+        on_delete=models.CASCADE,
+        related_name='histories',
+        verbose_name=_('발주서')
+    )
+    from_status = models.CharField(_('이전 상태'), max_length=20, choices=PurchaseOrder.ORDER_STATUS)
+    to_status = models.CharField(_('변경 상태'), max_length=20, choices=PurchaseOrder.ORDER_STATUS)
+    change_type = models.CharField(_('변경 유형'), max_length=20, choices=STATUS_CHANGES)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        verbose_name=_('처리자')
+    )
+    notes = models.TextField(_('비고'), blank=True)
+    created_at = models.DateTimeField(_('처리일시'), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('발주서 이력')
+        verbose_name_plural = _('발주서 이력 목록')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.purchase_order.order_number} ({self.from_status} → {self.to_status})"

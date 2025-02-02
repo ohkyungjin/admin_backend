@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Supplier, InventoryItem, StockMovement, PurchaseOrder, PurchaseOrderItem
+from .models import Category, Supplier, InventoryItem, StockMovement, PurchaseOrder, PurchaseOrderItem, PurchaseOrderHistory
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -36,10 +36,15 @@ class StockMovementSerializer(serializers.ModelSerializer):
 
 class PurchaseOrderItemSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source='item.name', read_only=True)
+    item_code = serializers.CharField(source='item.code', read_only=True)
     
     class Meta:
         model = PurchaseOrderItem
-        fields = '__all__'
+        fields = [
+            'id', 'item_name', 'item_code', 'quantity',
+            'unit_price', 'total_price', 'received_quantity',
+            'notes', 'order', 'item'
+        ]
 
 
 class PurchaseOrderItemCreateSerializer(serializers.ModelSerializer):
@@ -49,38 +54,69 @@ class PurchaseOrderItemCreateSerializer(serializers.ModelSerializer):
 
 
 class PurchaseOrderListSerializer(serializers.ModelSerializer):
-    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
-    items = serializers.SerializerMethodField()
+    supplier_name = serializers.CharField(source='supplier.name')
+    status_display = serializers.CharField(source='get_status_display')
+    created_by_name = serializers.CharField(source='created_by.name')
+    items_info = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOrder
-        fields = ('id', 'order_number', 'supplier_name', 'status_display', 
-                 'order_date', 'expected_date', 'total_amount', 'created_by_name', 'created_at',
-                 'items')
+        fields = [
+            'id', 'order_number', 'supplier_name',
+            'order_date', 'expected_date', 'status', 'status_display',
+            'total_amount', 'created_at', 'created_by_name',
+            'items_info', 'notes'
+        ]
 
-    def get_items(self, obj):
-        return [{
-            'id': item.id,
-            'name': item.item.name,
-            'item_code': item.item.code,
-            'unit_price': item.unit_price,
-            'quantity': item.quantity,
-            'total_price': item.total_price
-        } for item in obj.items.all()]
+    def get_items_info(self, obj):
+        return [
+            {
+                'name': item.item.name,
+                'code': item.item.code,
+                'quantity': item.quantity,
+                'unit_price': item.unit_price,
+                'total_price': item.total_price
+            } for item in obj.items.all()
+        ]
+
+
+class PurchaseOrderHistorySerializer(serializers.ModelSerializer):
+    from_status_display = serializers.CharField(source='get_from_status_display', read_only=True)
+    to_status_display = serializers.CharField(source='get_to_status_display', read_only=True)
+    changed_by_name = serializers.CharField(source='changed_by.name', read_only=True)
+
+    class Meta:
+        model = PurchaseOrderHistory
+        fields = [
+            'id', 'purchase_order',
+            'from_status', 'from_status_display',
+            'to_status', 'to_status_display',
+            'changed_by', 'changed_by_name',
+            'notes', 'created_at'
+        ]
 
 
 class PurchaseOrderDetailSerializer(serializers.ModelSerializer):
-    supplier = SupplierSerializer(read_only=True)
     items = PurchaseOrderItemSerializer(many=True, read_only=True)
+    supplier = SupplierSerializer(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     created_by_name = serializers.CharField(source='created_by.name', read_only=True)
     approved_by_name = serializers.CharField(source='approved_by.name', read_only=True)
+    ordered_by_name = serializers.CharField(source='ordered_by.name', read_only=True)
+    received_by_name = serializers.CharField(source='received_by.name', read_only=True)
+    histories = PurchaseOrderHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model = PurchaseOrder
-        fields = '__all__'
+        fields = [
+            'id', 'order_number', 'supplier', 'order_date', 'expected_date',
+            'status', 'status_display', 'total_amount', 'notes',
+            'created_by', 'created_by_name', 'created_at',
+            'approved_by', 'approved_by_name', 'approved_at',
+            'ordered_by', 'ordered_by_name', 'ordered_at',
+            'received_by', 'received_by_name', 'received_at',
+            'items', 'histories'
+        ]
 
 
 class PurchaseOrderCreateSerializer(serializers.ModelSerializer):

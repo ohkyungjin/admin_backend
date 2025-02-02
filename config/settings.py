@@ -46,8 +46,9 @@ INSTALLED_APPS = [
     'django_filters',
     'debug_toolbar',
     # Local apps
-    'accounts',
-    'inventory',
+    'accounts.apps.AccountsConfig',
+    'inventory.apps.InventoryConfig',
+    'funeral.apps.FuneralConfig',
 ]
 
 MIDDLEWARE = [
@@ -60,6 +61,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware',
+    'funeral.middleware.FuneralLoggingMiddleware',  # 장례 서비스 로깅 미들웨어 추가
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -183,6 +185,9 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
 }
+#Telegram 전송
+TELEGRAM_BOT_TOKEN = 'bot6197488892:AAEiIIb-8W5UQTILtELZOxcjN9d99VMwsFs'
+TELEGRAM_CHAT_ID = '1193007491'
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
@@ -213,50 +218,34 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
-        },
-        'detailed': {
-            'format': '\n------------------------\n{levelname} at {asctime}\nModule: {module}\nMessage: {message}\n------------------------',
+            'format': '[{asctime}] {levelname} {name} {message}',
             'style': '{',
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'detailed',
-            'level': 'DEBUG',
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'debug.log'),
-            'formatter': 'detailed',
-            'level': 'DEBUG',
+            'formatter': 'verbose',
         },
     },
     'loggers': {
-        'django': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
-            'propagate': True,
-        },
-        'accounts': {
-            'handlers': ['console', 'file'],
+        '': {
+            'handlers': ['console'],
             'level': 'DEBUG',
-            'propagate': True,
         },
-        'inventory': {
-            'handlers': ['console', 'file'],
+        'django': {
+            'handlers': ['console'],
             'level': 'INFO',
-            'propagate': True,
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
 }
 
-# logs 디렉토리가 없으면 생성
-if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
-    os.makedirs(os.path.join(BASE_DIR, 'logs'))
+# 로그 파일 저장 디렉토리 생성
+if not os.path.exists(BASE_DIR / 'logs'):
+    os.makedirs(BASE_DIR / 'logs')
