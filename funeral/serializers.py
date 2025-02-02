@@ -45,10 +45,19 @@ class PackageItemSerializer(serializers.ModelSerializer):
 
 class FuneralPackageSerializer(serializers.ModelSerializer):
     items = PackageItemSerializer(many=True, read_only=True)
+    price = serializers.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        source='base_price', 
+        required=True
+    )
 
     class Meta:
         model = FuneralPackage
-        fields = ['id', 'name', 'description', 'base_price', 'is_active', 'items']
+        fields = ['id', 'name', 'description', 'price', 'is_active', 'items']
+        extra_kwargs = {
+            'base_price': {'write_only': True}
+        }
 
 
 class PremiumLineItemSerializer(serializers.ModelSerializer):
