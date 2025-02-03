@@ -45,19 +45,54 @@ class PackageItemSerializer(serializers.ModelSerializer):
 
 class FuneralPackageSerializer(serializers.ModelSerializer):
     items = PackageItemSerializer(many=True, read_only=True)
+    items_data = PackageItemSerializer(many=True, write_only=True, required=False)
     price = serializers.DecimalField(
         max_digits=10, 
         decimal_places=2, 
         source='base_price', 
-        required=True
+        required=True,
+        coerce_to_string=False
     )
 
     class Meta:
         model = FuneralPackage
-        fields = ['id', 'name', 'description', 'price', 'is_active', 'items']
+        fields = ['id', 'name', 'description', 'price', 'is_active', 'items', 'items_data']
         extra_kwargs = {
             'base_price': {'write_only': True}
         }
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # items_data의 초기값을 현재 items로 설정
+        items_data = []
+        for item in instance.items.all():
+            items_data.append({
+                'category_id': item.category.id,
+                'default_item_id': item.default_item.id,
+                'is_required': item.is_required
+            })
+        ret['items_data'] = items_data
+        return ret
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items_data', [])
+        package = FuneralPackage.objects.create(**validated_data)
+        
+        for item_data in items_data:
+            PackageItem.objects.create(package=package, **item_data)
+        
+        return package
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items_data', [])
+        instance = super().update(instance, validated_data)
+        
+        if items_data:
+            instance.items.all().delete()  # 기존 아이템 삭제
+            for item_data in items_data:
+                PackageItem.objects.create(package=instance, **item_data)
+        
+        return instance
 
 
 class PremiumLineItemSerializer(serializers.ModelSerializer):

@@ -24,6 +24,7 @@ class Supplier(models.Model):
     phone = models.CharField(_('전화번호'), max_length=20)
     email = models.EmailField(_('이메일'), blank=True)
     address = models.TextField(_('주소'), blank=True)
+    notes = models.TextField(_('비고'), blank=True)
     created_at = models.DateTimeField(_('생성일'), auto_now_add=True)
     updated_at = models.DateTimeField(_('수정일'), auto_now=True)
 

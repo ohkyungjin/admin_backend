@@ -172,6 +172,11 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({'error': '상태 변경 중 오류가 발생했습니다.'},
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['GET'])
+    def me(self, request):
+        """현재 로그인한 사용자의 정보를 반환합니다."""
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
 
 class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ActivityLog.objects.all()

@@ -22,9 +22,24 @@ class FuneralPackageViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = FuneralPackageSerializer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        logger.debug('Executing get_queryset in FuneralPackageViewSet')
+        for package in qs:
+            logger.debug(f'Package {package.name} items count: {package.items.count()}')
+            for item in package.items.all():
+                logger.debug(f'  - Item: Category={item.category.name}, Default Item={item.default_item.name}')
+        return qs
+
     def list(self, request, *args, **kwargs):
         logger.info('Listing funeral packages')
-        return super().list(request, *args, **kwargs)
+        logger.debug(f'Request Method: {request.method}')
+        logger.debug(f'Request Headers: {request.headers}')
+        logger.debug(f'Request Query Params: {request.query_params}')
+        logger.debug(f'Request User: {request.user}')
+        response = super().list(request, *args, **kwargs)
+        logger.debug(f'Response Data: {response.data}')
+        return response
 
     def create(self, request, *args, **kwargs):
         logger.info(f'Creating funeral package with data: {request.data}')
