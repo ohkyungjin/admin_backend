@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'inventory.apps.InventoryConfig',
     'funeral.apps.FuneralConfig',
+    'reservations.apps.ReservationsConfig'
 ]
 
 MIDDLEWARE = [
@@ -212,33 +213,48 @@ CACHES = {
 # Session settings
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
-# Logging settings
+# Logging Configuration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '[{asctime}] {levelname} {name} {message}',
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
             'style': '{',
+        },
+        'simple': {
+            'format': '[{levelname}] {asctime} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S'
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': 'debug.log',
             'formatter': 'verbose',
         },
     },
     'loggers': {
-        '': {
-            'handlers': ['console'],
+        '': {  # Root logger
+            'handlers': ['console', 'file'],
             'level': 'DEBUG',
         },
-        'django': {
-            'handlers': ['console'],
-            'level': 'INFO',
+        'reservations': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
             'propagate': False,
         },
-        'django.server': {
+        'funeral': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'django.db.backends': {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
@@ -249,3 +265,4 @@ LOGGING = {
 # 로그 파일 저장 디렉토리 생성
 if not os.path.exists(BASE_DIR / 'logs'):
     os.makedirs(BASE_DIR / 'logs')
+
