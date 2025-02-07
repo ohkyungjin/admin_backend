@@ -149,15 +149,38 @@ class ReservationDetailSerializer(serializers.ModelSerializer):
 class ReservationCreateSerializer(serializers.ModelSerializer):
     customer = CustomerSerializer()
     pet = PetSerializer()
+    package_id = serializers.PrimaryKeyRelatedField(
+        source='package',
+        queryset=FuneralPackage.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    memorial_room_id = serializers.PrimaryKeyRelatedField(
+        source='memorial_room',
+        queryset=MemorialRoom.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    assigned_staff = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = Reservation
         fields = [
-            'customer', 'pet', 'package', 'memorial_room',
+            'customer', 'pet', 'package_id', 'memorial_room_id',
             'scheduled_at', 'assigned_staff', 'is_emergency',
             'visit_route', 'referral_hospital',
             'need_death_certificate', 'custom_requests'
         ]
+        extra_kwargs = {
+            'scheduled_at': {'required': False},
+            'visit_route': {'required': False},
+            'is_emergency': {'required': False},
+            'need_death_certificate': {'required': False}
+        }
 
     def create(self, validated_data):
         customer_data = validated_data.pop('customer')

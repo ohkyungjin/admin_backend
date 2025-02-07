@@ -36,11 +36,11 @@ class Pet(models.Model):
 
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='pets')
     name = models.CharField(_('반려동물명'), max_length=100)
-    species = models.CharField(_('종'), max_length=50)
+    species = models.CharField(_('종'), max_length=50, blank=True, null=True)
     breed = models.CharField(_('품종'), max_length=100, blank=True)
-    age = models.IntegerField(_('나이'))
-    weight = models.DecimalField(_('체중'), max_digits=5, decimal_places=2)
-    gender = models.CharField(_('성별'), max_length=10, choices=GENDER_CHOICES, default='male')
+    age = models.IntegerField(_('나이'), blank=True, null=True)
+    weight = models.DecimalField(_('체중'), max_digits=5, decimal_places=2, blank=True, null=True)
+    gender = models.CharField(_('성별'), max_length=10, choices=GENDER_CHOICES, blank=True, null=True)
     is_neutered = models.BooleanField(_('중성화 여부'), default=False)
     death_date = models.DateTimeField(_('사망일시'), blank=True, null=True)
     death_reason = models.CharField(_('사망사유'), max_length=20, choices=DEATH_REASON_CHOICES, blank=True, null=True)
@@ -92,17 +92,19 @@ class Reservation(models.Model):
 
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='reservations')
     pet = models.ForeignKey(Pet, on_delete=models.PROTECT, related_name='reservations')
-    package = models.ForeignKey(FuneralPackage, on_delete=models.PROTECT, related_name='reservations')
-    memorial_room = models.ForeignKey(MemorialRoom, on_delete=models.PROTECT, related_name='reservations')
-    scheduled_at = models.DateTimeField(_('예약일시'))
+    package = models.ForeignKey(FuneralPackage, on_delete=models.PROTECT, related_name='reservations', blank=True, null=True)
+    memorial_room = models.ForeignKey(MemorialRoom, on_delete=models.PROTECT, related_name='reservations', blank=True, null=True)
+    scheduled_at = models.DateTimeField(_('예약일시'), blank=True, null=True)
     status = models.CharField(_('상태'), max_length=20, choices=STATUS_CHOICES, default='pending')
     assigned_staff = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name='assigned_reservations'
+        related_name='assigned_reservations',
+        blank=True,
+        null=True
     )
     is_emergency = models.BooleanField(_('긴급여부'), default=False)
-    visit_route = models.CharField(_('방문경로'), max_length=20, choices=VISIT_ROUTE_CHOICES)
+    visit_route = models.CharField(_('방문경로'), max_length=20, choices=VISIT_ROUTE_CHOICES, blank=True, null=True)
     referral_hospital = models.CharField(_('경유병원'), max_length=100, blank=True)
     need_death_certificate = models.BooleanField(_('장례확인서필요여부'), default=False)
     custom_requests = models.TextField(_('요청사항'), blank=True)

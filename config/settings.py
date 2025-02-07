@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'inventory.apps.InventoryConfig',
     'funeral.apps.FuneralConfig',
-    'reservations.apps.ReservationsConfig'
+    'reservations.apps.ReservationsConfig',
 ]
 
 MIDDLEWARE = [
