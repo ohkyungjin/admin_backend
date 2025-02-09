@@ -2,12 +2,15 @@ from django.shortcuts import render
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.request import Request
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import QuerySet
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date, time
 import pytz
+from typing import Dict, Any, List, Optional, Union
 from .models import (
     Customer, Pet, MemorialRoom, Reservation,
     ReservationHistory
@@ -23,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class CustomerViewSet(viewsets.ModelViewSet):
+    """고객 정보 관리 ViewSet"""
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
     filter_backends = [filters.SearchFilter]
@@ -30,6 +34,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
 
 
 class PetViewSet(viewsets.ModelViewSet):
+    """반려동물 정보 관리 ViewSet"""
     queryset = Pet.objects.all()
     serializer_class = PetSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -74,6 +79,7 @@ class MemorialRoomViewSet(viewsets.ModelViewSet):
 
 
 class ReservationViewSet(viewsets.ModelViewSet):
+    """예약 관리 ViewSet"""
     queryset = Reservation.objects.all()
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['status', 'is_emergency', 'assigned_staff']
@@ -83,6 +89,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
     ]
 
     def get_serializer_class(self):
+        """요청 액션에 따른 시리얼라이저 클래스 반환"""
         if self.action == 'list':
             return ReservationListSerializer
         elif self.action == 'create':
@@ -91,120 +98,79 @@ class ReservationViewSet(viewsets.ModelViewSet):
             return ReservationUpdateSerializer
         return ReservationDetailSerializer
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet:
+        """필터링이 적용된 쿼리셋 반환"""
         queryset = super().get_queryset().select_related(
             'customer', 'pet', 'package', 'memorial_room',
             'assigned_staff', 'created_by'
         ).prefetch_related('histories')
 
-        # 날짜 필터링
+        try:
+            return self._apply_date_filters(queryset)
+        except (ValueError, pytz.exceptions.UnknownTimeZoneError) as e:
+            logger.error(f"Date filtering error: {str(e)}")
+            return queryset
+
+    def _apply_date_filters(self, queryset: QuerySet) -> QuerySet:
+        """날짜 기반 필터링 적용"""
         date = self.request.query_params.get('date')
         start_date = self.request.query_params.get('start_date')
         end_date = self.request.query_params.get('end_date')
         memorial_room_id = self.request.query_params.get('memorial_room_id')
         client_timezone = self.request.query_params.get('timezone', 'Asia/Seoul')
-        
-        try:
-            if date:
-                try:
-                    # RFC 2822 형식의 날짜 파싱 시도
-                    date_obj = datetime.strptime(date, '%a, %d %b %Y %H:%M:%S %Z')
-                except ValueError:
-                    try:
-                        # ISO 형식의 날짜 파싱 시도
-                        date_obj = datetime.fromisoformat(date.replace('Z', '+00:00'))
-                    except ValueError:
-                        # 기본 YYYY-MM-DD 형식 시도
-                        date_obj = datetime.strptime(date, '%Y-%m-%d')
-                
-                date_aware = timezone.make_aware(date_obj, pytz.timezone(client_timezone))
-                queryset = queryset.filter(
-                    scheduled_at__date=date_aware.date()
-                )
-            
-            if start_date:
-                start_dt = timezone.datetime.strptime(start_date, '%Y-%m-%d')
-                start_dt = timezone.make_aware(start_dt, pytz.timezone(client_timezone))
-                queryset = queryset.filter(scheduled_at__gte=start_dt)
-            
-            if end_date:
-                end_dt = timezone.datetime.strptime(end_date, '%Y-%m-%d')
-                end_dt = timezone.make_aware(end_dt, pytz.timezone(client_timezone))
-                end_dt = end_dt.replace(hour=23, minute=59, second=59)
-                queryset = queryset.filter(scheduled_at__lte=end_dt)
 
-            if memorial_room_id:
-                queryset = queryset.filter(memorial_room_id=memorial_room_id)
+        if date:
+            date_obj = self._parse_date(date)
+            date_aware = timezone.make_aware(date_obj, pytz.timezone(client_timezone))
+            queryset = queryset.filter(scheduled_at__date=date_aware.date())
 
-        except (ValueError, pytz.exceptions.UnknownTimeZoneError) as e:
-            logger.error(f"Invalid date format or timezone: date={date}, start_date={start_date}, end_date={end_date}, timezone={client_timezone}")
-            logger.error(f"Error details: {str(e)}")
+        if start_date:
+            start_dt = timezone.make_aware(
+                datetime.strptime(start_date, '%Y-%m-%d'),
+                pytz.timezone(client_timezone)
+            )
+            queryset = queryset.filter(scheduled_at__gte=start_dt)
+
+        if end_date:
+            end_dt = timezone.make_aware(
+                datetime.strptime(end_date, '%Y-%m-%d'),
+                pytz.timezone(client_timezone)
+            )
+            end_dt = end_dt.replace(hour=23, minute=59, second=59)
+            queryset = queryset.filter(scheduled_at__lte=end_dt)
+
+        if memorial_room_id:
+            queryset = queryset.filter(memorial_room_id=memorial_room_id)
 
         return queryset
 
+    def _parse_date(self, date_str: str) -> datetime:
+        """다양한 형식의 날짜 문자열을 파싱"""
+        for fmt in ['%a, %d %b %Y %H:%M:%S %Z', '%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%d']:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
+                continue
+        raise ValueError(f"Unsupported date format: {date_str}")
+
     @action(detail=False, methods=['post'], url_path='bulk-status-update')
-    def bulk_status_update(self, request):
-        """여러 예약의 상태를 일괄 변경합니다."""
+    def bulk_status_update(self, request: Request) -> Response:
+        """여러 예약의 상태를 일괄 변경"""
         reservation_ids = request.data.get('reservation_ids', [])
         new_status = request.data.get('status')
         notes = request.data.get('notes', '')
 
         logger.info(f"Bulk status update requested: ids={reservation_ids}, new_status={new_status}")
 
-        if not reservation_ids or not new_status:
+        if not self._validate_bulk_update_params(reservation_ids, new_status):
             return Response(
                 {"error": "예약 ID 목록과 변경할 상태는 필수입니다."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if new_status not in dict(Reservation.STATUS_CHOICES):
-            return Response(
-                {"error": "올바르지 않은 상태입니다."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        success_count = 0
-        failed_updates = []
-
-        with transaction.atomic():
-            reservations = Reservation.objects.select_for_update().filter(id__in=reservation_ids)
-            
-            for reservation in reservations:
-                try:
-                    logger.info(f"Processing reservation {reservation.id}: current_status={reservation.status}, new_status={new_status}")
-                    
-                    if not self._is_valid_status_transition(reservation.status, new_status):
-                        error_msg = f"잘못된 상태 변경입니다. (현재: {reservation.status} → 요청: {new_status})"
-                        logger.warning(f"Invalid status transition for reservation {reservation.id}: {error_msg}")
-                        failed_updates.append({
-                            "id": reservation.id,
-                            "error": error_msg,
-                            "current_status": reservation.status,
-                            "requested_status": new_status
-                        })
-                        continue
-
-                    old_status = reservation.status
-                    reservation.status = new_status
-                    reservation.save()
-
-                    ReservationHistory.objects.create(
-                        reservation=reservation,
-                        from_status=old_status,
-                        to_status=new_status,
-                        changed_by=request.user,
-                        notes=notes
-                    )
-
-                    success_count += 1
-                    logger.info(f"Successfully updated reservation {reservation.id}: {old_status} → {new_status}")
-
-                except Exception as e:
-                    logger.error(f"Failed to update reservation {reservation.id}: {str(e)}")
-                    failed_updates.append({
-                        "id": reservation.id,
-                        "error": str(e)
-                    })
+        success_count, failed_updates = self._process_bulk_status_update(
+            reservation_ids, new_status, notes, request.user
+        )
 
         response_data = {
             "success": True,
@@ -214,6 +180,86 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
         logger.info(f"Bulk update completed: success={success_count}, failures={len(failed_updates)}")
         return Response(response_data, status=status.HTTP_200_OK)
+
+    def _validate_bulk_update_params(self, reservation_ids: List[int], new_status: str) -> bool:
+        """일괄 상태 변경 파라미터 검증"""
+        if not reservation_ids or not new_status:
+            return False
+        return new_status in dict(Reservation.STATUS_CHOICES)
+
+    def _process_bulk_status_update(
+        self, 
+        reservation_ids: List[int], 
+        new_status: str, 
+        notes: str,
+        user: Any
+    ) -> tuple[int, list]:
+        """일괄 상태 변경 처리"""
+        success_count = 0
+        failed_updates = []
+
+        with transaction.atomic():
+            reservations = Reservation.objects.select_for_update().filter(id__in=reservation_ids)
+            
+            for reservation in reservations:
+                try:
+                    if not self._is_valid_status_transition(reservation.status, new_status):
+                        error_msg = f"잘못된 상태 변경입니다. (현재: {reservation.status} → 요청: {new_status})"
+                        self._add_failed_update(failed_updates, reservation, error_msg)
+                        continue
+
+                    self._update_reservation_status(reservation, new_status, notes, user)
+                    success_count += 1
+
+                except Exception as e:
+                    logger.error(f"Failed to update reservation {reservation.id}: {str(e)}")
+                    self._add_failed_update(failed_updates, reservation, str(e))
+
+        return success_count, failed_updates
+
+    def _add_failed_update(
+        self, 
+        failed_updates: list, 
+        reservation: Reservation, 
+        error: str
+    ) -> None:
+        """실패한 업데이트 정보 추가"""
+        failed_updates.append({
+            "id": reservation.id,
+            "error": error,
+            "current_status": reservation.status
+        })
+
+    def _update_reservation_status(
+        self, 
+        reservation: Reservation, 
+        new_status: str, 
+        notes: str,
+        user: Any
+    ) -> None:
+        """예약 상태 업데이트 및 이력 생성"""
+        old_status = reservation.status
+        reservation.status = new_status
+        reservation.save()
+
+        ReservationHistory.objects.create(
+            reservation=reservation,
+            from_status=old_status,
+            to_status=new_status,
+            changed_by=user,
+            notes=notes
+        )
+
+    def _is_valid_status_transition(self, current_status: str, new_status: str) -> bool:
+        """상태 변경이 유효한지 검사"""
+        valid_transitions = {
+            Reservation.STATUS_PENDING: [Reservation.STATUS_CONFIRMED, Reservation.STATUS_CANCELLED],
+            Reservation.STATUS_CONFIRMED: [Reservation.STATUS_IN_PROGRESS, Reservation.STATUS_CANCELLED],
+            Reservation.STATUS_IN_PROGRESS: [Reservation.STATUS_COMPLETED],
+            Reservation.STATUS_COMPLETED: [],
+            Reservation.STATUS_CANCELLED: []
+        }
+        return new_status in valid_transitions.get(current_status, [])
 
     @action(detail=True, methods=['post'])
     def change_status(self, request, pk=None):
@@ -301,24 +347,13 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    def _is_valid_status_transition(self, current_status, new_status):
-        """상태 변경이 유효한지 검사합니다."""
-        valid_transitions = {
-            'pending': ['confirmed', 'cancelled'],
-            'confirmed': ['in_progress', 'cancelled'],
-            'in_progress': ['completed'],
-            'completed': [],
-            'cancelled': []
-        }
-        return new_status in valid_transitions.get(current_status, [])
-
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
 
-    @action(detail=False, methods=['GET'])
+    @action(detail=False, methods=['get'], url_path='available-times', url_name='available_times')
     def available_times(self, request):
         """특정 날짜의 예약 가능한 시간대를 조회합니다."""
         date_str = request.query_params.get('date')
@@ -326,7 +361,11 @@ class ReservationViewSet(viewsets.ModelViewSet):
         
         if not date_str:
             return Response(
-                {"error": "날짜를 지정해주세요."},
+                {
+                    "status": "error",
+                    "message": "날짜를 지정해주세요.",
+                    "code": "DATE_REQUIRED"
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -336,7 +375,11 @@ class ReservationViewSet(viewsets.ModelViewSet):
             # 과거 날짜 체크
             if target_date < timezone.now().date():
                 return Response(
-                    {"error": "과거 날짜는 조회할 수 없습니다."},
+                    {
+                        "status": "error",
+                        "message": "과거 날짜는 조회할 수 없습니다.",
+                        "code": "PAST_DATE"
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -388,18 +431,25 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 current_time = (datetime.combine(target_date, current_time) + timedelta(hours=1)).time()
 
             return Response({
-                'date': date_str,
-                'memorial_room_id': memorial_room_id,
-                'available_times': available_times
+                'status': 'success',
+                'data': {
+                    'date': date_str,
+                    'memorial_room_id': memorial_room_id,
+                    'available_times': available_times
+                }
             })
 
         except ValueError:
             return Response(
-                {"error": "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)"},
+                {
+                    "status": "error",
+                    "message": "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)",
+                    "code": "INVALID_DATE_FORMAT"
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    @action(detail=False, methods=['POST'])
+    @action(detail=False, methods=['post'], url_path='check-availability', url_name='check_availability')
     def check_availability(self, request):
         """예약 시간대 중복 여부를 체크합니다."""
         memorial_room_id = request.data.get('memorial_room_id')
@@ -413,7 +463,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            scheduled_dt = timezone.datetime.fromisoformat(scheduled_at)
+            scheduled_dt = timezone.datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
             end_dt = scheduled_dt + timedelta(hours=duration_hours)
 
             # 과거 시간 체크
@@ -447,7 +497,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 "conflicting_reservation": None
             })
 
-        except ValueError:
+        except ValueError as e:
+            logger.error(f"Invalid datetime format: {scheduled_at}, error: {str(e)}")
             return Response(
                 {"error": "날짜/시간 형식이 올바르지 않습니다."},
                 status=status.HTTP_400_BAD_REQUEST

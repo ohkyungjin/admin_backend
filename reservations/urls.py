@@ -9,7 +9,7 @@ router = DefaultRouter()
 router.register(r'customers', CustomerViewSet)
 router.register(r'pets', PetViewSet)
 router.register(r'memorial-rooms', MemorialRoomViewSet)
-router.register(r'reservations', ReservationViewSet)
+router.register(r'reservations', ReservationViewSet, basename='reservation')
 
 urlpatterns = [
     path('', include(router.urls)),
