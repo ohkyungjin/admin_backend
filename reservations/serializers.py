@@ -75,10 +75,13 @@ class ReservationHistorySerializer(serializers.ModelSerializer):
 class ReservationListSerializer(serializers.ModelSerializer):
     customer = CustomerSerializer(read_only=True)
     pet = PetListSerializer(read_only=True)
+    memorial_room_id = serializers.IntegerField(source='memorial_room.id', read_only=True)
     memorial_room_name = serializers.CharField(source='memorial_room.name', read_only=True)
+    package_id = serializers.IntegerField(source='package.id', read_only=True)
     package_name = serializers.CharField(source='package.name', read_only=True)
     package_price = serializers.DecimalField(source='package.base_price', max_digits=10, decimal_places=2, read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    assigned_staff_id = serializers.IntegerField(source='assigned_staff.id', read_only=True)
     assigned_staff_name = serializers.CharField(source='assigned_staff.name', read_only=True)
     visit_route_display = serializers.CharField(source='get_visit_route_display', read_only=True)
     visit_route_choices = serializers.SerializerMethodField()
@@ -88,9 +91,10 @@ class ReservationListSerializer(serializers.ModelSerializer):
         model = Reservation
         fields = [
             'id', 'customer', 'pet', 
-            'memorial_room_name', 'package_name', 'package_price',
+            'memorial_room_id', 'memorial_room_name',
+            'package_id', 'package_name', 'package_price',
             'scheduled_at', 'status', 'status_display', 'status_choices',
-            'is_emergency', 'assigned_staff_name', 
+            'is_emergency', 'assigned_staff_id', 'assigned_staff_name',
             'visit_route', 'visit_route_display', 'visit_route_choices',
             'referral_hospital', 'need_death_certificate', 'created_at'
         ]
@@ -161,7 +165,8 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    assigned_staff = serializers.PrimaryKeyRelatedField(
+    assigned_staff_id = serializers.PrimaryKeyRelatedField(
+        source='assigned_staff',
         queryset=User.objects.all(),
         required=False,
         allow_null=True
@@ -171,7 +176,7 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
         model = Reservation
         fields = [
             'customer', 'pet', 'package_id', 'memorial_room_id',
-            'scheduled_at', 'assigned_staff', 'is_emergency',
+            'scheduled_at', 'assigned_staff_id', 'is_emergency',
             'visit_route', 'referral_hospital',
             'need_death_certificate', 'custom_requests'
         ]
@@ -239,50 +244,43 @@ class ReservationUpdateSerializer(serializers.ModelSerializer):
         - gender: 성별 (male/female)
         - death_date: 사망일시
         - death_reason: 사망사유 (natural/disease/accident/euthanasia)
-    - memorial_room: 추모실 이름
-    - package: 패키지 이름
+    - memorial_room_id: 추모실 ID
+    - package_id: 패키지 ID
+    - assigned_staff_id: 담당 직원 ID
     - is_emergency: 긴급여부 (true/false)
-    - assigned_staff: 담당 직원 ID
     - referral_hospital: 의뢰 병원명
     - need_death_certificate: 사망확인서 필요여부 (true/false)
     - custom_requests: 요청사항
     """
-    memorial_room = serializers.CharField(required=False)
-    package = serializers.CharField(required=False)
     customer = CustomerSerializer(required=False)
     pet = PetSerializer(required=False)
-    assigned_staff = serializers.PrimaryKeyRelatedField(
+    memorial_room_id = serializers.PrimaryKeyRelatedField(
+        queryset=MemorialRoom.objects.all(),
+        source='memorial_room',
+        required=False,
+        allow_null=True
+    )
+    package_id = serializers.PrimaryKeyRelatedField(
+        queryset=FuneralPackage.objects.all(),
+        source='package',
+        required=False,
+        allow_null=True
+    )
+    assigned_staff_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(),
-        required=False
+        source='assigned_staff',
+        required=False,
+        allow_null=True
     )
 
     class Meta:
         model = Reservation
         fields = [
-            'customer', 'pet', 'memorial_room', 'package',
-            'scheduled_at', 'status', 'assigned_staff',
+            'customer', 'pet', 'memorial_room_id', 'package_id',
+            'scheduled_at', 'status', 'assigned_staff_id',
             'is_emergency', 'visit_route', 'referral_hospital',
             'need_death_certificate', 'custom_requests'
         ]
-
-    def validate(self, data):
-        if 'memorial_room' in data:
-            try:
-                memorial_room_name = data['memorial_room']
-                memorial_room = MemorialRoom.objects.get(name=memorial_room_name)
-                data['memorial_room'] = memorial_room
-            except MemorialRoom.DoesNotExist:
-                raise serializers.ValidationError({"memorial_room": "존재하지 않는 추모실입니다."})
-
-        if 'package' in data:
-            try:
-                package_name = data['package']
-                package = FuneralPackage.objects.get(name=package_name)
-                data['package'] = package
-            except FuneralPackage.DoesNotExist:
-                raise serializers.ValidationError({"package": "존재하지 않는 패키지입니다."})
-
-        return data
 
     @transaction.atomic
     def update(self, instance, validated_data):

@@ -2,6 +2,9 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
 from funeral.models import FuneralPackage
+from memorial_rooms.models import MemorialRoom
+from django.utils import timezone
+from decimal import Decimal
 
 
 class Customer(models.Model):
@@ -27,6 +30,7 @@ class Pet(models.Model):
         ('disease', '병사'),
         ('accident', '사고사'),
         ('euthanasia', '안락사'),
+        ('other', '기타'),
     ]
 
     GENDER_CHOICES = [
@@ -57,23 +61,6 @@ class Pet(models.Model):
         return f"{self.name} ({self.species})"
 
 
-class MemorialRoom(models.Model):
-    name = models.CharField(_('추모실명'), max_length=100)
-    capacity = models.IntegerField(_('수용인원'))
-    description = models.TextField(_('설명'), blank=True)
-    is_active = models.BooleanField(_('사용가능여부'), default=True)
-    created_at = models.DateTimeField(_('생성일'), auto_now_add=True)
-    updated_at = models.DateTimeField(_('수정일'), auto_now=True)
-
-    class Meta:
-        verbose_name = _('추모실')
-        verbose_name_plural = _('추모실 목록')
-        ordering = ['name']
-
-    def __str__(self):
-        return self.name
-
-
 class Reservation(models.Model):
     STATUS_CHOICES = [
         ('pending', '대기중'),
@@ -88,6 +75,12 @@ class Reservation(models.Model):
         ('blog', '블로그'),
         ('hospital', '병원'),
         ('referral', '지인소개'),
+    ]
+
+    CANCEL_REASON_CHOICES = [
+        ('customer_request', '고객 요청'),
+        ('admin_cancel', '관리자 취소'),
+        ('no_show', '노쇼'),
     ]
 
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='reservations')
@@ -116,6 +109,18 @@ class Reservation(models.Model):
     created_at = models.DateTimeField(_('생성일'), auto_now_add=True)
     updated_at = models.DateTimeField(_('수정일'), auto_now=True)
 
+    # 취소 관련 필드 추가
+    cancelled_at = models.DateTimeField(_('취소일시'), null=True, blank=True)
+    cancel_reason = models.CharField(_('취소사유'), max_length=20, choices=CANCEL_REASON_CHOICES, null=True, blank=True)
+    cancel_notes = models.TextField(_('취소비고'), blank=True)
+    penalty_amount = models.DecimalField(_('위약금'), max_digits=10, decimal_places=2, null=True, blank=True)
+    refund_amount = models.DecimalField(_('환불금액'), max_digits=10, decimal_places=2, null=True, blank=True)
+    refund_status = models.CharField(_('환불상태'), max_length=20, default='pending', choices=[
+        ('pending', '대기'),
+        ('completed', '완료'),
+        ('failed', '실패'),
+    ])
+
     class Meta:
         verbose_name = _('예약')
         verbose_name_plural = _('예약 목록')
@@ -127,6 +132,32 @@ class Reservation(models.Model):
 
     def __str__(self):
         return f"{self.customer.name} - {self.pet.name} ({self.get_status_display()})"
+
+    def calculate_penalty_amount(self):
+        """취소 시점에 따른 위약금을 계산합니다."""
+        if not self.scheduled_at or not self.package:
+            return 0
+
+        now = timezone.now()
+        hours_until_reservation = (self.scheduled_at - now).total_seconds() / 3600
+
+        if hours_until_reservation >= 168:  # 7일 이상
+            return 0
+        elif hours_until_reservation >= 72:  # 3-7일
+            return self.package.base_price * Decimal('0.3')
+        elif hours_until_reservation >= 24:  # 1-3일
+            return self.package.base_price * Decimal('0.5')
+        else:  # 24시간 이내
+            return self.package.base_price
+
+    def can_cancel(self):
+        """예약 취소 가능 여부를 확인합니다."""
+        if self.status == 'pending':
+            return True
+        elif self.status == 'confirmed':
+            hours_until_reservation = (self.scheduled_at - timezone.now()).total_seconds() / 3600
+            return hours_until_reservation >= 24
+        return False
 
 
 class ReservationHistory(models.Model):
