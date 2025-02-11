@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'funeral.apps.FuneralConfig',
     'reservations.apps.ReservationsConfig',
     'memorial_rooms.apps.MemorialRoomsConfig',
+    'dashboard',  # 대시보드 앱 추가
 ]
 
 MIDDLEWARE = [

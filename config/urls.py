@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/v1/funeral/', include('funeral.urls')),
     path('api/v1/reservations/', include('reservations.urls')),
     path('api/v1/memorial-rooms/', include('memorial_rooms.urls')),
+    path('api/v1/', include('dashboard.urls')),
 ]
 
 if settings.DEBUG:
