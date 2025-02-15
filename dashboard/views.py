@@ -1,16 +1,13 @@
-from django.shortcuts import render
-from rest_framework import viewsets, status
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Count, Q
 from datetime import datetime, timedelta
 
-from reservations.models import Reservation, MemorialRoom, ReservationHistory
+from reservations.models import Reservation
 from accounts.models import User
-from .models import DashboardWidget
+from memorial_rooms.models import MemorialRoom
 from .serializers import (
-    DashboardWidgetSerializer,
     ReservationStatsSerializer,
     MemorialRoomStatusSerializer,
     StaffWorkloadSerializer,
@@ -128,60 +125,27 @@ class DashboardViewSet(viewsets.ViewSet):
         status_data = []
 
         for room in MemorialRoom.objects.all():
-            # 상태 자동 업데이트 처리
-            # 1. 예약 시간이 된 예약을 진행중으로 변경
-            confirmed_reservations = Reservation.objects.filter(
-                memorial_room=room,
-                scheduled_at__date=today,
-                scheduled_at__lte=now,
-                status='confirmed'
-            )
-            for reservation in confirmed_reservations:
-                reservation.status = 'in_progress'
-                reservation.save()
-                # 예약 이력 생성
-                ReservationHistory.objects.create(
-                    reservation=reservation,
-                    from_status='confirmed',
-                    to_status='in_progress',
-                    notes='예약 시간 도래로 자동 상태 변경'
-                )
-
-            # 2. 2시간이 지난 진행중 예약을 완료로 변경
-            in_progress_reservations = Reservation.objects.filter(
-                memorial_room=room,
-                scheduled_at__date=today,
-                scheduled_at__lte=now - timedelta(hours=2),
-                status='in_progress'
-            )
-            for reservation in in_progress_reservations:
-                reservation.status = 'completed'
-                reservation.save()
-                # 예약 이력 생성
-                ReservationHistory.objects.create(
-                    reservation=reservation,
-                    from_status='in_progress',
-                    to_status='completed',
-                    notes='예약 시간 2시간 경과로 자동 완료 처리'
-                )
-
             # 현재 진행중인 예약 확인
             current_reservation = Reservation.objects.filter(
                 memorial_room=room,
-                scheduled_at__date=today,
-                status__in=['in_progress', 'confirmed']
-            ).filter(
-                Q(scheduled_at__lte=now + timedelta(hours=2))  # 현재 시간으로부터 2시간 이내에 시작하는 예약
-            ).first()
+                status__in=['confirmed', 'in_progress'],
+                scheduled_at__lte=now + timedelta(hours=2)  # 2시간 이내 예정된 예약 포함
+            ).order_by('scheduled_at').first()
 
             # 다음 예약 - 현재 시간 이후의 가장 빠른 예약
-            next_reservation = Reservation.objects.filter(
-                memorial_room=room,
-                scheduled_at__date=today,
-                status__in=['confirmed', 'pending']
-            ).filter(
-                Q(scheduled_at__gt=now if not current_reservation else current_reservation.scheduled_at + timedelta(hours=2))
-            ).order_by('scheduled_at').first()
+            next_reservation = None
+            if current_reservation:
+                next_reservation = Reservation.objects.filter(
+                    memorial_room=room,
+                    status__in=['confirmed', 'pending'],
+                    scheduled_at__gt=current_reservation.scheduled_at + timedelta(hours=2)
+                ).order_by('scheduled_at').first()
+            else:
+                next_reservation = Reservation.objects.filter(
+                    memorial_room=room,
+                    status__in=['confirmed', 'pending'],
+                    scheduled_at__gt=now
+                ).order_by('scheduled_at').first()
 
             # 오늘의 예약 수
             today_count = Reservation.objects.filter(
@@ -190,15 +154,27 @@ class DashboardViewSet(viewsets.ViewSet):
                 status__in=['pending', 'confirmed', 'in_progress']
             ).count()
 
-            # 현재 예약과 다음 예약이 같은 경우 다음 예약은 None으로 설정
-            if next_reservation and current_reservation and next_reservation.id == current_reservation.id:
-                next_reservation = None
+            # 추모실 상태 업데이트
+            if current_reservation:
+                if current_reservation.scheduled_at > now:
+                    room.current_status = 'reserved'
+                else:
+                    room.current_status = 'in_use'
+            else:
+                room.current_status = 'available'
+            room.save()
+
+            # next_reservation 직렬화
+            next_reservation_data = None
+            if next_reservation:
+                from reservations.serializers import ReservationListSerializer
+                next_reservation_data = ReservationListSerializer(next_reservation).data
 
             status_data.append({
                 'room_id': room.id,
                 'room_name': room.name,
-                'current_status': 'in_use' if current_reservation else 'available',
-                'next_reservation': next_reservation,
+                'current_status': room.current_status,
+                'next_reservation': next_reservation_data,
                 'today_reservation_count': today_count
             })
 

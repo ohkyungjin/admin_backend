@@ -297,6 +297,8 @@ class ReservationHistory(models.Model):
     changed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
         on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         verbose_name=_('처리자')
     )
     notes = models.TextField(_('비고'), blank=True)
@@ -312,3 +314,38 @@ class ReservationHistory(models.Model):
 
     def __str__(self) -> str:
         return f"{self.reservation} ({self.from_status} → {self.to_status})"
+
+
+class MemorialRoom(models.Model):
+    """추모실 모델"""
+    ROOM_STATUS_CHOICES = [
+        ('available', '사용가능'),
+        ('in_use', '사용중'),
+        ('reserved', '예약중'),
+    ]
+
+    name = models.CharField('추모실 이름', max_length=100)
+    capacity = models.IntegerField('수용 인원', default=10)
+    description = models.TextField('설명', blank=True)
+    is_active = models.BooleanField('활성화 여부', default=True)
+    operating_hours = models.JSONField(
+        '운영 시간',
+        default=dict,
+        help_text='{"start_time": "HH:MM", "end_time": "HH:MM"} 형식'
+    )
+    current_status = models.CharField(
+        '현재 상태',
+        max_length=20,
+        choices=ROOM_STATUS_CHOICES,
+        default='available'
+    )
+    created_at = models.DateTimeField('생성일시', auto_now_add=True)
+    updated_at = models.DateTimeField('수정일시', auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = '추모실'
+        verbose_name_plural = '추모실 목록'
+
+    def __str__(self):
+        return f"{self.name} ({self.get_current_status_display()})"

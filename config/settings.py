@@ -29,6 +29,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+CRONJOBS = [
+    ('* * * * *', 'reservations.cron.check_reservation_status'),
+]
 
 # Application definition
 
@@ -45,6 +48,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'django_filters',
     'debug_toolbar',
+    'django_apscheduler',
     # Local apps
     'accounts.apps.AccountsConfig',
     'inventory.apps.InventoryConfig',

@@ -8,6 +8,7 @@ from funeral.models import FuneralPackage
 from funeral.serializers import FuneralPackageSerializer
 from accounts.serializers import UserSerializer
 from accounts.models import User
+from memorial_rooms.models import MemorialRoom as MemorialRoomModel
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -54,7 +55,7 @@ class PetSerializer(serializers.ModelSerializer):
 
 class MemorialRoomSerializer(serializers.ModelSerializer):
     class Meta:
-        model = MemorialRoom
+        model = MemorialRoomModel
         fields = ['id', 'name', 'capacity', 'description', 'is_active']
 
 
@@ -161,12 +162,11 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
     pet = PetSerializer()
     package_id = serializers.PrimaryKeyRelatedField(
         source='package',
-        queryset=FuneralPackage.objects.all()
+        queryset=FuneralPackage.objects.all(),
+        required=False,
+        allow_null=True
     )
-    memorial_room_id = serializers.PrimaryKeyRelatedField(
-        source='memorial_room',
-        queryset=MemorialRoom.objects.all()
-    )
+    memorial_room_id = serializers.IntegerField(required=True)
     assigned_staff_id = serializers.PrimaryKeyRelatedField(
         source='assigned_staff',
         queryset=User.objects.all(),
@@ -183,13 +183,23 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
             'need_death_certificate', 'custom_requests'
         ]
 
+    def validate_memorial_room_id(self, value):
+        """추모실 ID 유효성 검사"""
+        try:
+            memorial_room = MemorialRoomModel.objects.get(id=value)
+            return value
+        except MemorialRoomModel.DoesNotExist:
+            raise serializers.ValidationError("존재하지 않는 추모실입니다.")
+
     def create(self, validated_data: Dict[str, Any]) -> Reservation:
         customer_data = validated_data.pop('customer')
         pet_data = validated_data.pop('pet')
-        memorial_room = validated_data.get('memorial_room')  # source='memorial_room'으로 인해 이렇게 접근
+        memorial_room_id = validated_data.pop('memorial_room_id')
 
-        print(f"Validated data: {validated_data}")  # 디버그용
-        print(f"Memorial room: {memorial_room}")    # 디버그용
+        try:
+            memorial_room = MemorialRoomModel.objects.get(id=memorial_room_id)
+        except MemorialRoomModel.DoesNotExist:
+            raise serializers.ValidationError({"memorial_room_id": "존재하지 않는 추모실입니다."})
 
         with transaction.atomic():
             # 고객 생성 또는 조회
@@ -207,7 +217,7 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
                 'pet': pet,
                 'created_by': self.context['request'].user,
                 'status': Reservation.STATUS_PENDING,
-                'memorial_room': memorial_room  # 명시적으로 추가
+                'memorial_room': memorial_room
             })
             
             reservation = Reservation.objects.create(**validated_data)
@@ -226,16 +236,14 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
 
 class ReservationUpdateSerializer(serializers.ModelSerializer):
     """예약 수정용 시리얼라이저"""
+    customer = CustomerSerializer(required=False)
+    pet = PetSerializer(required=False)
     package_id = serializers.PrimaryKeyRelatedField(
         source='package',
         queryset=FuneralPackage.objects.all(),
         required=False
     )
-    memorial_room_id = serializers.PrimaryKeyRelatedField(
-        source='memorial_room',
-        queryset=MemorialRoom.objects.all(),
-        required=False
-    )
+    memorial_room_id = serializers.IntegerField(required=False)
     assigned_staff_id = serializers.PrimaryKeyRelatedField(
         source='assigned_staff',
         queryset=User.objects.all(),
@@ -246,14 +254,46 @@ class ReservationUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reservation
         fields = [
-            'memorial_room_id', 'package_id',
+            'customer', 'pet', 'memorial_room_id', 'package_id',
             'scheduled_at', 'assigned_staff_id', 'is_emergency',
             'visit_route', 'referral_hospital',
             'need_death_certificate', 'custom_requests'
         ]
 
+    def validate_memorial_room_id(self, value):
+        """추모실 ID 유효성 검사"""
+        try:
+            memorial_room = MemorialRoomModel.objects.get(id=value)
+            return value
+        except MemorialRoomModel.DoesNotExist:
+            raise serializers.ValidationError("존재하지 않는 추모실입니다.")
+
     def update(self, instance: Reservation, validated_data: Dict[str, Any]) -> Reservation:
-        print(f"Update validated data: {validated_data}")  # 디버그용
+        customer_data = validated_data.pop('customer', None)
+        pet_data = validated_data.pop('pet', None)
+        memorial_room_id = validated_data.pop('memorial_room_id', None)
+
+        # 고객 정보 업데이트
+        if customer_data:
+            customer = instance.customer
+            for attr, value in customer_data.items():
+                setattr(customer, attr, value)
+            customer.save()
+
+        # 반려동물 정보 업데이트
+        if pet_data:
+            pet = instance.pet
+            for attr, value in pet_data.items():
+                setattr(pet, attr, value)
+            pet.save()
+
+        # 추모실 정보 업데이트
+        if memorial_room_id:
+            try:
+                memorial_room = MemorialRoomModel.objects.get(id=memorial_room_id)
+                validated_data['memorial_room'] = memorial_room
+            except MemorialRoomModel.DoesNotExist:
+                raise serializers.ValidationError({"memorial_room_id": "존재하지 않는 추모실입니다."})
 
         with transaction.atomic():
             # 기본 필드 업데이트

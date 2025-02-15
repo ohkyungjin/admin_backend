@@ -12,9 +12,9 @@ from datetime import datetime, timedelta, date, time
 import pytz
 from typing import Dict, Any, List, Optional, Union
 from .models import (
-    Customer, Pet, MemorialRoom, Reservation,
-    ReservationHistory
+    Customer, Pet, Reservation, ReservationHistory
 )
+from memorial_rooms.models import MemorialRoom
 from .serializers import (
     CustomerSerializer, PetSerializer, MemorialRoomSerializer,
     ReservationListSerializer, ReservationDetailSerializer,
@@ -347,11 +347,69 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    def create(self, request, *args, **kwargs):
+        """예약 생성"""
+        memorial_room_id = request.data.get('memorial_room_id')
+        if memorial_room_id:
+            try:
+                memorial_room = MemorialRoom.objects.get(id=memorial_room_id)
+                if not memorial_room.is_active:
+                    return Response(
+                        {
+                            "status": "error",
+                            "status_code": 400,
+                            "errors": {
+                                "memorial_room_id": ["해당 추모실은 현재 사용할 수 없습니다."]
+                            }
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except MemorialRoom.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "status_code": 400,
+                        "errors": {
+                            "memorial_room_id": ["존재하지 않는 추모실입니다."]
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        return super().create(request, *args, **kwargs)
+
     def update(self, request, *args, **kwargs):
+        """예약 수정"""
+        memorial_room_id = request.data.get('memorial_room_id')
+        if memorial_room_id:
+            try:
+                memorial_room = MemorialRoom.objects.get(id=memorial_room_id)
+                if not memorial_room.is_active:
+                    return Response(
+                        {
+                            "status": "error",
+                            "status_code": 400,
+                            "errors": {
+                                "memorial_room_id": ["해당 추모실은 현재 사용할 수 없습니다."]
+                            }
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except MemorialRoom.DoesNotExist:
+                return Response(
+                    {
+                        "status": "error",
+                        "status_code": 400,
+                        "errors": {
+                            "memorial_room_id": ["존재하지 않는 추모실입니다."]
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
-        return super().partial_update(request, *args, **kwargs)
+        """예약 부분 수정"""
+        return self.update(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'], url_path='available-times', url_name='available_times')
     def available_times(self, request):
@@ -463,15 +521,22 @@ class ReservationViewSet(viewsets.ModelViewSet):
             )
 
         try:
+            # 추모실 존재 여부 확인
+            try:
+                memorial_room = MemorialRoom.objects.get(id=memorial_room_id)
+                if not memorial_room.is_active:
+                    return Response(
+                        {"error": "해당 추모실은 현재 사용할 수 없습니다."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except MemorialRoom.DoesNotExist:
+                return Response(
+                    {"error": "존재하지 않는 추모실입니다."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
             scheduled_dt = timezone.datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
             end_dt = scheduled_dt + timedelta(hours=duration_hours)
-
-            # 과거 시간 체크
-            if scheduled_dt < timezone.now():
-                return Response(
-                    {"error": "과거 시간으로 예약할 수 없습니다."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
 
             # 중복 예약 체크
             conflicting_reservation = Reservation.objects.filter(

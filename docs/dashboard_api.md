@@ -11,196 +11,63 @@ Authorization: Bearer {access_token}
 Content-Type: application/json
 ```
 
+## 공통 쿼리 파라미터
+```
+date: YYYY-MM-DD (조회할 날짜, 기본값: 오늘)
+```
+
 ## 응답 데이터 포맷
 
 ### 1. ReservationStats (예약 통계)
 ```json
 {
-    "today_summary": {
-        "total": {
-            "type": "integer",
-            "description": "오늘 총 예약 수"
-        },
-        "completed": {
-            "type": "integer",
-            "description": "오늘 완료된 예약 수"
-        },
-        "pending": {
-            "type": "integer",
-            "description": "오늘 대기 중인 예약 수"
-        },
-        "confirmed": {
-            "type": "integer",
-            "description": "오늘 확정된 예약 수"
-        },
-        "in_progress": {
-            "type": "integer",
-            "description": "오늘 진행 중인 예약 수"
-        },
-        "cancelled": {
-            "type": "integer",
-            "description": "오늘 취소된 예약 수"
-        }
+    "today_total": {
+        "type": "integer",
+        "description": "오늘 총 예약 수"
     },
-    "emergency_stats": {
-        "today_count": {
-            "type": "integer",
-            "description": "오늘의 긴급 예약 수"
-        },
-        "pending_count": {
-            "type": "integer",
-            "description": "처리 대기 중인 긴급 예약 수"
-        },
-        "average_response_time": {
-            "type": "integer",
-            "description": "평균 긴급 예약 처리 시간(분)"
-        }
+    "today_completed": {
+        "type": "integer",
+        "description": "오늘 완료된 예약 수"
     },
-    "time_slot_analysis": {
-        "peak_hours": [
-            {
-                "hour": {
-                    "type": "integer",
-                    "description": "시간대 (0-23)"
-                },
-                "reservation_count": {
-                    "type": "integer",
-                    "description": "예약 수"
-                },
-                "utilization_rate": {
-                    "type": "float",
-                    "description": "이용률 (0.0-1.0)"
-                }
-            }
-        ],
-        "quiet_hours": [
-            {
-                "hour": {
-                    "type": "integer",
-                    "description": "시간대 (0-23)"
-                },
-                "reservation_count": {
-                    "type": "integer",
-                    "description": "예약 수"
-                },
-                "utilization_rate": {
-                    "type": "float",
-                    "description": "이용률 (0.0-1.0)"
-                }
-            }
-        ]
+    "today_pending": {
+        "type": "integer",
+        "description": "오늘 대기 중인 예약 수"
     },
-    "weekly_analysis": {
-        "stats": {
-            "type": "object",
-            "description": "주간 예약 통계",
-            "properties": {
-                "YYYY-MM-DD": {
-                    "total": {
-                        "type": "integer",
-                        "description": "총 예약 수"
-                    },
-                    "completed": {
-                        "type": "integer",
-                        "description": "완료된 예약 수"
-                    },
-                    "emergency": {
-                        "type": "integer",
-                        "description": "긴급 예약 수"
-                    },
-                    "utilization_rate": {
-                        "type": "float",
-                        "description": "추모실 이용률"
-                    }
-                }
-            }
-        },
-        "trends": {
-            "busiest_day": {
-                "type": "string",
-                "description": "가장 바쁜 요일"
-            },
-            "average_daily": {
-                "type": "float",
-                "description": "일평균 예약 수"
-            },
-            "growth_rate": {
-                "type": "float",
-                "description": "전주 대비 증감률"
+    "today_confirmed": {
+        "type": "integer",
+        "description": "오늘 확정된 예약 수"
+    },
+    "today_in_progress": {
+        "type": "integer",
+        "description": "오늘 진행 중인 예약 수"
+    },
+    "today_cancelled": {
+        "type": "integer",
+        "description": "오늘 취소된 예약 수"
+    },
+    "emergency_count": {
+        "type": "integer",
+        "description": "오늘의 긴급 예약 수"
+    },
+    "weekly_stats": {
+        "type": "object",
+        "description": "최근 7일간 일별 예약 통계",
+        "properties": {
+            "YYYY-MM-DD": {
+                "type": "integer",
+                "description": "해당 일자의 예약 수"
             }
         }
     },
-    "monthly_analysis": {
-        "stats": {
-            "type": "object",
-            "description": "월간 예약 통계",
-            "properties": {
-                "YYYY-MM-DD": {
-                    "total": {
-                        "type": "integer",
-                        "description": "총 예약 수"
-                    },
-                    "revenue": {
-                        "type": "integer",
-                        "description": "매출액"
-                    },
-                    "emergency_ratio": {
-                        "type": "float",
-                        "description": "긴급 예약 비율"
-                    }
-                }
-            }
-        },
-        "trends": {
-            "mom_growth": {
-                "type": "float",
-                "description": "전월 대비 성장률"
-            },
-            "peak_days": {
-                "type": "array",
-                "description": "성수기 날짜",
-                "items": {
-                    "date": {
-                        "type": "string",
-                        "description": "날짜 (YYYY-MM-DD)"
-                    },
-                    "reservation_count": {
-                        "type": "integer",
-                        "description": "예약 수"
-                    }
-                }
+    "monthly_stats": {
+        "type": "object",
+        "description": "이번 달 일별 예약 통계",
+        "properties": {
+            "YYYY-MM-DD": {
+                "type": "integer",
+                "description": "해당 일자의 예약 수"
             }
         }
-    },
-    "customer_insights": {
-        "repeat_customers": {
-            "type": "integer",
-            "description": "재방문 고객 수"
-        },
-        "average_service_time": {
-            "type": "integer",
-            "description": "평균 서비스 시간(분)"
-        },
-        "satisfaction_rate": {
-            "type": "float",
-            "description": "고객 만족도 (0.0-5.0)"
-        },
-        "popular_services": [
-            {
-                "service_name": {
-                    "type": "string",
-                    "description": "서비스명"
-                },
-                "usage_count": {
-                    "type": "integer",
-                    "description": "이용 건수"
-                },
-                "satisfaction_rate": {
-                    "type": "float",
-                    "description": "서비스별 만족도"
-                }
-            }
-        ]
     }
 }
 ```
@@ -218,14 +85,32 @@ Content-Type: application/json
     },
     "current_status": {
         "type": "string",
-        "enum": ["in_use", "available"],
-        "description": "현재 사용 상태"
+        "enum": ["available", "in_use", "reserved"],
+        "description": "현재 상태 (사용가능/사용중/예약중)"
     },
     "next_reservation": {
         "type": "object",
         "description": "다음 예약 정보",
         "nullable": true,
-        "properties": "ReservationList 객체 참조"
+        "properties": {
+            "id": "integer",
+            "customer": {
+                "id": "integer",
+                "name": "string",
+                "phone": "string",
+                "email": "string",
+                "address": "string"
+            },
+            "pet": {
+                "id": "integer",
+                "name": "string",
+                "species": "string",
+                "breed": "string"
+            },
+            "scheduled_at": "datetime",
+            "status": "string",
+            "is_emergency": "boolean"
+        }
     },
     "today_reservation_count": {
         "type": "integer",
@@ -252,7 +137,19 @@ Content-Type: application/json
     "today_assignments": {
         "type": "array",
         "description": "오늘의 배정 목록",
-        "items": "ReservationList 객체 참조"
+        "items": {
+            "id": "integer",
+            "scheduled_at": "datetime",
+            "status": "string",
+            "customer": {
+                "name": "string",
+                "phone": "string"
+            },
+            "pet": {
+                "name": "string",
+                "species": "string"
+            }
+        }
     }
 }
 ```
@@ -263,334 +160,115 @@ Content-Type: application/json
 ```
 GET /dashboard/
 
-[Response 200]
-{
-    "reservation_stats": {
-        "today_summary": {
-            "total": 15,
-            "completed": 5,
-            "pending": 4,
-            "confirmed": 4,
-            "in_progress": 2,
-            "cancelled": 0
-        },
-        "emergency_stats": {
-            "today_count": 2,
-            "pending_count": 1,
-            "average_response_time": 45
-        },
-        "time_slot_analysis": {
-            "peak_hours": [
-                {
-                    "hour": 14,
-                    "reservation_count": 5,
-                    "utilization_rate": 0.83
-                },
-                {
-                    "hour": 15,
-                    "reservation_count": 4,
-                    "utilization_rate": 0.67
-                }
-            ],
-            "quiet_hours": [
-                {
-                    "hour": 11,
-                    "reservation_count": 1,
-                    "utilization_rate": 0.17
-                }
-            ]
-        },
-        "weekly_analysis": {
-            "stats": {
-                "2024-02-05": {
-                    "total": 12,
-                    "completed": 12,
-                    "emergency": 1,
-                    "utilization_rate": 0.75
-                },
-                "2024-02-06": {
-                    "total": 15,
-                    "completed": 13,
-                    "emergency": 2,
-                    "utilization_rate": 0.83
-                }
-            },
-            "trends": {
-                "busiest_day": "화요일",
-                "average_daily": 13.5,
-                "growth_rate": 0.12
-            }
-        },
-        "monthly_analysis": {
-            "stats": {
-                "2024-02-01": {
-                    "total": 10,
-                    "revenue": 3500000,
-                    "emergency_ratio": 0.2
-                }
-            },
-            "trends": {
-                "mom_growth": 0.15,
-                "peak_days": [
-                    {
-                        "date": "2024-02-15",
-                        "reservation_count": 18
-                    }
-                ]
-            }
-        },
-        "customer_insights": {
-            "repeat_customers": 25,
-            "average_service_time": 120,
-            "satisfaction_rate": 4.8,
-            "popular_services": [
-                {
-                    "service_name": "프리미엄 장례",
-                    "usage_count": 45,
-                    "satisfaction_rate": 4.9
-                }
-            ]
-        }
-    },
-    "memorial_room_status": [
-        {
-            "room_id": 1,
-            "room_name": "추모실 1",
-            "current_status": "in_use",
-            "next_reservation": {
-                "id": 123,
-                "customer": {...},
-                "scheduled_at": "2024-02-07T14:00:00+09:00"
-            },
-            "today_reservation_count": 3
-        }
-    ],
-    "recent_reservations": [
-        {
-            "id": 124,
-            "customer": {...},
-            "scheduled_at": "2024-02-07T15:00:00+09:00",
-            "status": "pending"
-        }
-    ],
-    "staff_workload": [
-        {
-            "staff_id": 1,
-            "staff_name": "홍길동",
-            "assigned_count": 3,
-            "today_assignments": [...]
-        }
-    ]
-}
+Query Parameters:
+- date: YYYY-MM-DD (선택, 기본값: 오늘)
 
-[Error Responses]
-- 401 Unauthorized:
-    - 인증 토큰 없음 또는 만료
-- 403 Forbidden:
-    - 접근 권한 없음
+Response 200:
+{
+    "reservation_stats": {...},
+    "memorial_room_status": [...],
+    "recent_reservations": [...],
+    "staff_workload": [...]
+}
 ```
 
 ### 2. 예약 통계 데이터 조회
 ```
 GET /dashboard/reservation_stats/
 
-[Response 200]
-{
-    "today_summary": {
-        "total": 15,
-        "completed": 5,
-        "pending": 4,
-        "confirmed": 4,
-        "in_progress": 2,
-        "cancelled": 0
-    },
-    "emergency_stats": {
-        "today_count": 2,
-        "pending_count": 1,
-        "average_response_time": 45
-    },
-    "time_slot_analysis": {
-        "peak_hours": [
-            {
-                "hour": 14,
-                "reservation_count": 5,
-                "utilization_rate": 0.83
-            },
-            {
-                "hour": 15,
-                "reservation_count": 4,
-                "utilization_rate": 0.67
-            }
-        ],
-        "quiet_hours": [
-            {
-                "hour": 11,
-                "reservation_count": 1,
-                "utilization_rate": 0.17
-            }
-        ]
-    },
-    "weekly_analysis": {
-        "stats": {
-            "2024-02-05": {
-                "total": 12,
-                "completed": 12,
-                "emergency": 1,
-                "utilization_rate": 0.75
-            },
-            "2024-02-06": {
-                "total": 15,
-                "completed": 13,
-                "emergency": 2,
-                "utilization_rate": 0.83
-            }
-        },
-        "trends": {
-            "busiest_day": "화요일",
-            "average_daily": 13.5,
-            "growth_rate": 0.12
-        }
-    },
-    "monthly_analysis": {
-        "stats": {
-            "2024-02-01": {
-                "total": 10,
-                "revenue": 3500000,
-                "emergency_ratio": 0.2
-            }
-        },
-        "trends": {
-            "mom_growth": 0.15,
-            "peak_days": [
-                {
-                    "date": "2024-02-15",
-                    "reservation_count": 18
-                }
-            ]
-        }
-    },
-    "customer_insights": {
-        "repeat_customers": 25,
-        "average_service_time": 120,
-        "satisfaction_rate": 4.8,
-        "popular_services": [
-            {
-                "service_name": "프리미엄 장례",
-                "usage_count": 45,
-                "satisfaction_rate": 4.9
-            }
-        ]
-    }
-}
+Query Parameters:
+- date: YYYY-MM-DD (선택, 기본값: 오늘)
 
-[Error Responses]
-- 401 Unauthorized:
-    - 인증 토큰 없음 또는 만료
-- 403 Forbidden:
-    - 접근 권한 없음
+Response 200:
+{
+    "today_total": 15,
+    "today_completed": 5,
+    "today_pending": 4,
+    "today_confirmed": 4,
+    "today_in_progress": 2,
+    "today_cancelled": 0,
+    "emergency_count": 2,
+    "weekly_stats": {...},
+    "monthly_stats": {...}
+}
 ```
 
 ### 3. 추모실 현황 데이터 조회
 ```
 GET /dashboard/memorial_room_status/
 
-[Response 200]
+Query Parameters:
+- date: YYYY-MM-DD (선택, 기본값: 오늘)
+
+Response 200:
 [
     {
         "room_id": 1,
         "room_name": "추모실 1",
         "current_status": "in_use",
-        "next_reservation": {
-            "id": 123,
-            "customer": {...},
-            "scheduled_at": "2024-02-07T14:00:00+09:00"
-        },
+        "next_reservation": {...},
         "today_reservation_count": 3
     }
 ]
-
-[Error Responses]
-- 401 Unauthorized:
-    - 인증 토큰 없음 또는 만료
-- 403 Forbidden:
-    - 접근 권한 없음
 ```
 
 ### 4. 직원 배정 현황 데이터 조회
 ```
 GET /dashboard/staff_workload/
 
-[Response 200]
+Query Parameters:
+- date: YYYY-MM-DD (선택, 기본값: 오늘)
+
+Response 200:
 [
     {
         "staff_id": 1,
         "staff_name": "홍길동",
         "assigned_count": 3,
-        "today_assignments": [
-            {
-                "id": 124,
-                "scheduled_at": "2024-02-07T15:00:00+09:00",
-                "status": "confirmed"
-            }
-        ]
+        "today_assignments": [...]
     }
 ]
-
-[Error Responses]
-- 401 Unauthorized:
-    - 인증 토큰 없음 또는 만료
-- 403 Forbidden:
-    - 접근 권한 없음
 ```
 
 ## 상태 코드 정의
 
 ### 추모실 상태 (current_status)
 ```
-in_use: 사용중
 available: 사용가능
+in_use: 사용중
+reserved: 예약중
 ```
 
-## 에러 코드 정의
+### 예약 상태 (status)
+```
+pending: 대기중
+confirmed: 확정
+in_progress: 진행중
+completed: 완료
+cancelled: 취소
+```
+
+## 에러 응답
 
 ```json
 {
-    "error_codes": {
-        "UNAUTHORIZED": {
-            "code": "D001",
-            "message": "인증되지 않은 사용자입니다",
-            "status": 401
-        },
-        "FORBIDDEN": {
-            "code": "D002",
-            "message": "접근 권한이 없습니다",
-            "status": 403
-        },
-        "INTERNAL_SERVER_ERROR": {
-            "code": "D003",
-            "message": "서버 내부 오류가 발생했습니다",
-            "status": 500
-        }
+    "error": {
+        "code": "string",
+        "message": "string"
     }
 }
 ```
 
-## 캐시 정책
+### 에러 코드
+```
+401 Unauthorized: 인증되지 않은 요청
+403 Forbidden: 권한 없음
+404 Not Found: 리소스를 찾을 수 없음
+500 Internal Server Error: 서버 내부 오류
+```
 
-각 엔드포인트의 캐시 정책은 다음과 같습니다:
-
-1. 대시보드 전체 데이터: 1분
-2. 예약 통계 데이터: 1분
-3. 추모실 현황 데이터: 30초
-4. 직원 배정 현황 데이터: 1분
-
-## 시간대 처리
-
-모든 날짜/시간 데이터는 다음 규칙을 따릅니다:
-
-1. 서버 저장: UTC 기준으로 저장
-2. API 응답: ISO 8601 형식의 타임스탬프 (기본: KST, +09:00)
-3. 통계 데이터:
-   - 일간: 00:00:00 ~ 23:59:59 (KST)
-   - 주간: 월요일 00:00:00 ~ 일요일 23:59:59 (KST)
-   - 월간: 1일 00:00:00 ~ 말일 23:59:59 (KST) 
+## 자동 업데이트
+- 10분마다 예약 상태와 추모실 상태가 자동으로 업데이트됩니다.
+- 예약 시간이 되면 자동으로 '진행중' 상태로 변경됩니다.
+- 예약 시작 2시간 후 자동으로 '완료' 상태로 변경됩니다.
+- 모든 상태 변경은 이력이 기록됩니다. 

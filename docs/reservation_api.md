@@ -127,13 +127,13 @@ Content-Type: application/json
     },
     "memorial_room_id": {
         "type": "integer",
-        "required": false,
+        "required": true,
         "description": "추모실 ID"
     },
     "package_id": {
         "type": "integer",
         "required": false,
-        "description": "장례 패키지 ID"
+        "description": "장례 패키지 ID (상담 전 미정인 경우 null 가능)"
     },
     "assigned_staff_id": {
         "type": "integer",
@@ -142,7 +142,7 @@ Content-Type: application/json
     },
     "scheduled_at": {
         "type": "datetime",
-        "required": false,
+        "required": true,
         "format": "YYYY-MM-DDThh:mm:ss±hh:mm",
         "description": "예약 일시"
     },
@@ -174,40 +174,6 @@ Content-Type: application/json
         "type": "string",
         "required": false,
         "description": "요청사항"
-    }
-}
-```
-
-### 4. Status Change (상태 변경)
-```json
-{
-    "status": {
-        "type": "string",
-        "required": true,
-        "choices": ["pending", "confirmed", "in_progress", "completed", "cancelled"],
-        "description": "변경할 상태"
-    },
-    "notes": {
-        "type": "string",
-        "required": false,
-        "description": "상태 변경 사유"
-    }
-}
-```
-
-### 5. Reschedule (일정 변경)
-```json
-{
-    "scheduled_at": {
-        "type": "datetime",
-        "required": true,
-        "format": "YYYY-MM-DDThh:mm:ss±hh:mm",
-        "description": "변경할 예약 일시"
-    },
-    "memorial_room_id": {
-        "type": "integer",
-        "required": false,
-        "description": "변경할 추모실 ID"
     }
 }
 ```
@@ -247,7 +213,6 @@ GET /reservations/reservations/
 - timezone (string, optional):
     - 클라이언트 타임존
     - 기본값: Asia/Seoul
-    - 예: America/New_York, Europe/London
 
 [Response 200]
 {
@@ -302,7 +267,139 @@ GET /reservations/reservations/
     - 접근 권한 없음
 ```
 
-### 2. 예약 가능 시간 조회
+### 2. 예약 상세 조회
+```
+GET /reservations/reservations/{id}/
+
+[Response 200]
+{
+    "id": 1,
+    "customer": {...},
+    "pet": {...},
+    "package": {...},
+    "package_id": 1,
+    "memorial_room_id": 1,
+    "scheduled_at": "2024-03-16T10:00:00+09:00",
+    "status": "pending",
+    "status_display": "대기중",
+    "assigned_staff": {...},
+    "is_emergency": false,
+    "visit_route": "internet",
+    "visit_route_display": "인터넷",
+    "referral_hospital": "",
+    "need_death_certificate": true,
+    "custom_requests": "",
+    "created_by": {...},
+    "created_at": "2024-03-15T14:30:00+09:00",
+    "updated_at": "2024-03-15T14:30:00+09:00",
+    "histories": [
+        {
+            "id": 1,
+            "from_status": "pending",
+            "from_status_display": "대기중",
+            "to_status": "confirmed",
+            "to_status_display": "확정",
+            "changed_by": {...},
+            "notes": "예약 확정",
+            "created_at": "2024-03-15T14:35:00+09:00"
+        }
+    ]
+}
+```
+
+### 3. 예약 생성
+```
+POST /reservations/reservations/
+
+[Request Body]
+{
+    "customer": {...},
+    "pet": {...},
+    "memorial_room_id": 1,
+    "package_id": 1,
+    "scheduled_at": "2024-03-16T10:00:00+09:00",
+    "assigned_staff_id": 1,
+    "is_emergency": false,
+    "visit_route": "internet",
+    "referral_hospital": "",
+    "need_death_certificate": true,
+    "custom_requests": ""
+}
+
+[Response 201]
+{
+    "id": 1,
+    "customer": {...},
+    "pet": {...},
+    ...
+}
+```
+
+### 4. 예약 수정
+```
+PUT /reservations/reservations/{id}/
+
+[Request Body]
+{
+    "memorial_room_id": 1,
+    "package_id": 1,
+    "scheduled_at": "2024-03-16T10:00:00+09:00",
+    "assigned_staff_id": 1,
+    "is_emergency": false,
+    "visit_route": "internet",
+    "referral_hospital": "",
+    "need_death_certificate": true,
+    "custom_requests": ""
+}
+
+[Response 200]
+{
+    "id": 1,
+    "customer": {...},
+    "pet": {...},
+    ...
+}
+```
+
+### 5. 예약 상태 변경
+```
+POST /reservations/reservations/{id}/change_status/
+
+[Request Body]
+{
+    "status": "confirmed",
+    "notes": "예약 확정 처리"
+}
+
+[Response 200]
+{
+    "id": 1,
+    "customer": {...},
+    "pet": {...},
+    ...
+}
+```
+
+### 6. 예약 일정 변경
+```
+POST /reservations/reservations/{id}/reschedule/
+
+[Request Body]
+{
+    "scheduled_at": "2024-03-17T14:00:00+09:00",
+    "memorial_room_id": 2
+}
+
+[Response 200]
+{
+    "id": 1,
+    "customer": {...},
+    "pet": {...},
+    ...
+}
+```
+
+### 7. 예약 가능 시간 조회
 ```
 GET /reservations/reservations/available-times/
 
@@ -316,38 +413,33 @@ GET /reservations/reservations/available-times/
 
 [Response 200]
 {
-    "date": "2024-03-20",
-    "memorial_room_id": 1,
-    "available_times": [
-        {
-            "start_time": "09:00:00",
-            "end_time": "11:00:00"
-        },
-        {
-            "start_time": "14:00:00",
-            "end_time": "16:00:00"
-        }
-    ]
+    "status": "success",
+    "data": {
+        "date": "2024-03-20",
+        "memorial_room_id": 1,
+        "available_times": [
+            {
+                "start_time": "09:00:00",
+                "end_time": "11:00:00"
+            },
+            {
+                "start_time": "14:00:00",
+                "end_time": "16:00:00"
+            }
+        ]
+    }
 }
-
-[Error Responses]
-- 400 Bad Request:
-    - 날짜 미지정
-    - 과거 날짜 지정
-    - 잘못된 날짜 형식
-- 404 Not Found:
-    - 존재하지 않는 추모실
 ```
 
-### 3. 예약 중복 체크
+### 8. 예약 중복 체크
 ```
 POST /reservations/reservations/check-availability/
 
 [Request Body]
 {
-    "memorial_room_id": 1,      // required, integer
-    "scheduled_at": "2024-03-20T14:00:00+09:00",  // required, datetime
-    "duration_hours": 2         // optional, integer, default: 2
+    "memorial_room_id": 1,
+    "scheduled_at": "2024-03-20T14:00:00+09:00",
+    "duration_hours": 2
 }
 
 [Response 200]
@@ -356,7 +448,7 @@ POST /reservations/reservations/check-availability/
     "conflicting_reservation": null
 }
 
-[Response 400 - 중복 예약 존재]
+[Response 200 - 중복 예약 존재]
 {
     "is_available": false,
     "conflicting_reservation": {
@@ -365,25 +457,17 @@ POST /reservations/reservations/check-availability/
         "duration_hours": 2
     }
 }
-
-[Error Responses]
-- 400 Bad Request:
-    - 필수 파라미터 누락
-    - 과거 시간 지정
-    - 잘못된 시간 형식
-- 404 Not Found:
-    - 존재하지 않는 추모실
 ```
 
-### 4. 일괄 상태 변경
+### 9. 일괄 상태 변경
 ```
 POST /reservations/reservations/bulk-status-update/
 
 [Request Body]
 {
-    "reservation_ids": [1, 2, 3],  // required, array of integers
-    "status": "confirmed",         // required, string
-    "notes": "일괄 확정 처리"       // optional, string
+    "reservation_ids": [1, 2, 3],
+    "status": "confirmed",
+    "notes": "일괄 확정 처리"
 }
 
 [Response 200]
@@ -400,7 +484,8 @@ POST /reservations/reservations/bulk-status-update/
     "failed_updates": [
         {
             "id": 2,
-            "error": "잘못된 상태 변경입니다."
+            "error": "잘못된 상태 변경입니다.",
+            "current_status": "completed"
         },
         {
             "id": 3,
@@ -408,15 +493,6 @@ POST /reservations/reservations/bulk-status-update/
         }
     ]
 }
-
-[Error Responses]
-- 400 Bad Request:
-    - 필수 파라미터 누락
-    - 잘못된 상태값
-- 401 Unauthorized:
-    - 인증 토큰 없음 또는 만료
-- 403 Forbidden:
-    - 접근 권한 없음
 ```
 
 ## 상태 코드 정의
@@ -446,6 +522,26 @@ accident: 사고사
 euthanasia: 안락사
 other: 기타
 ```
+
+### 취소 사유 (cancel_reason)
+```
+customer_request: 고객 요청
+admin_cancel: 관리자 취소
+no_show: 노쇼
+```
+
+### 환불 상태 (refund_status)
+```
+pending: 대기
+completed: 완료
+failed: 실패
+```
+
+## 자동 상태 변경
+
+1. 예약 시간이 되면 자동으로 '진행중' 상태로 변경됩니다.
+2. 예약 시작 2시간 후 자동으로 '완료' 상태로 변경됩니다.
+3. 모든 상태 변경은 이력이 기록됩니다.
 
 ## 에러 코드 정의
 
