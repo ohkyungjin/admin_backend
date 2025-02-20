@@ -413,98 +413,165 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='available-times', url_name='available_times')
     def available_times(self, request):
-        """특정 날짜의 예약 가능한 시간대를 조회합니다."""
-        date_str = request.query_params.get('date')
-        memorial_room_id = request.query_params.get('memorial_room_id')
-        
-        if not date_str:
-            return Response(
-                {
-                    "status": "error",
-                    "message": "날짜를 지정해주세요.",
-                    "code": "DATE_REQUIRED"
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+        """예약 가능한 시간 목록을 반환합니다."""
         try:
-            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-            
-            # 과거 날짜 체크
-            if target_date < timezone.now().date():
+            # 날짜 파라미터 검증
+            date_str = request.query_params.get('date')
+            if not date_str:
                 return Response(
-                    {
-                        "status": "error",
-                        "message": "과거 날짜는 조회할 수 없습니다.",
-                        "code": "PAST_DATE"
-                    },
+                    {"error": "날짜는 필수 파라미터입니다."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # 기본 운영 시간 설정 (09:00 ~ 22:00)
-            operating_hours = {
-                'start': '09:00:00',
-                'end': '22:00:00'
-            }
+            # 날짜 파싱
+            try:
+                target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response(
+                    {"error": "올바른 날짜 형식이 아닙니다. (YYYY-MM-DD)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            # 해당 날짜의 예약된 시간대 조회
+            # 과거 날짜 체크
+            now = timezone.localtime()
+            if target_date < now.date():
+                return Response(
+                    {"error": "과거 날짜는 선택할 수 없습니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # 추모실 ID 파라미터 처리
+            memorial_room_id = request.query_params.get('memorial_room_id')
+            if memorial_room_id:
+                try:
+                    memorial_room = MemorialRoom.objects.get(id=memorial_room_id)
+                except MemorialRoom.DoesNotExist:
+                    return Response(
+                        {"error": "존재하지 않는 추모실입니다."},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                return Response(
+                    {"error": "추모실 ID는 필수 파라미터입니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # 선택된 시간
+            selected_time = request.query_params.get('selected_time')
+            selected_datetime = None
+            if selected_time:
+                try:
+                    hour, minute = map(int, selected_time.split(':'))
+                    selected_datetime = timezone.make_aware(
+                        datetime.combine(target_date, time(hour, minute))
+                    )
+                except ValueError:
+                    return Response(
+                        {"error": "올바른 시간 형식이 아닙니다. (HH:MM)"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # 운영 시간 파싱
+            try:
+                start_time_str, end_time_str = memorial_room.operating_hours.split('-')
+                start_time = datetime.strptime(start_time_str.strip(), '%H:%M').time()
+                end_time = datetime.strptime(end_time_str.strip(), '%H:%M').time()
+            except (ValueError, AttributeError):
+                return Response(
+                    {"error": f"추모실 {memorial_room.name}의 운영 시간 형식이 올바르지 않습니다."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # 해당 날짜의 예약 목록 조회
             reservations = Reservation.objects.filter(
+                memorial_room=memorial_room,
                 scheduled_at__date=target_date,
                 status__in=['pending', 'confirmed', 'in_progress']
-            )
+            ).order_by('scheduled_at')
 
-            if memorial_room_id:
-                reservations = reservations.filter(memorial_room_id=memorial_room_id)
+            # 시간 슬롯 생성 (30분 단위)
+            time_slots = []
+            current_datetime = timezone.make_aware(datetime.combine(target_date, start_time))
+            end_datetime = timezone.make_aware(datetime.combine(target_date, end_time))
 
-            # 예약된 시간대를 제외한 가용 시간대 계산
-            reserved_times = [
-                {
-                    'start': r.scheduled_at.time(),
-                    'end': (r.scheduled_at + timedelta(hours=2)).time()
-                }
-                for r in reservations
-            ]
+            while current_datetime < end_datetime:
+                slot_start = current_datetime
+                slot_end = slot_start + timedelta(minutes=30)
 
-            # 가용 시간대 계산 로직 구현
-            available_times = []
-            current_time = datetime.strptime(operating_hours['start'], '%H:%M:%S').time()
-            end_time = datetime.strptime(operating_hours['end'], '%H:%M:%S').time()
+                # 기본 상태 설정
+                status_display = "available"
+                is_selectable = True
+                is_in_selected_block = False
+                block_start = None
+                block_end = None
+                blocking_reservation = None
 
-            while current_time < end_time:
-                slot_end = (datetime.combine(target_date, current_time) + timedelta(hours=2)).time()
-                is_available = True
+                # 현재 시간 이전의 슬롯은 제외
+                if slot_start <= now:
+                    status_display = "past"
+                    is_selectable = False
+                else:
+                    # 예약 시간과 겹치는지 확인
+                    for reservation in reservations:
+                        local_scheduled_at = timezone.localtime(reservation.scheduled_at)
+                        local_end_time = local_scheduled_at + timedelta(hours=2)
 
-                for reserved in reserved_times:
-                    if (current_time >= reserved['start'] and current_time < reserved['end']) or \
-                       (slot_end > reserved['start'] and slot_end <= reserved['end']):
-                        is_available = False
-                        break
+                        if (slot_start <= local_end_time and 
+                            slot_end > local_scheduled_at):
+                            status_display = "blocked"
+                            is_selectable = False
+                            block_start = local_scheduled_at.strftime('%H:%M')
+                            block_end = local_end_time.strftime('%H:%M')
+                            blocking_reservation = {
+                                'id': reservation.id,
+                                'scheduled_at': local_scheduled_at.strftime('%Y-%m-%d %H:%M'),
+                                'status': reservation.status
+                            }
+                            break
 
-                if is_available:
-                    available_times.append({
-                        'start_time': current_time.strftime('%H:%M:%S'),
-                        'end_time': slot_end.strftime('%H:%M:%S')
-                    })
+                    # 선택된 시간과 비교
+                    if selected_datetime:
+                        selected_end_time = selected_datetime + timedelta(hours=2)
+                        if (slot_start >= selected_datetime and 
+                            slot_start < selected_end_time):
+                            is_in_selected_block = True
 
-                current_time = (datetime.combine(target_date, current_time) + timedelta(hours=1)).time()
+                    # 운영 종료 2시간 전부터는 새로운 예약 불가
+                    if (end_datetime - slot_start).total_seconds() / 3600 < 2:
+                        status_display = "end_time"
+                        is_selectable = False
 
-            return Response({
-                'status': 'success',
-                'data': {
-                    'date': date_str,
-                    'memorial_room_id': memorial_room_id,
-                    'available_times': available_times
-                }
-            })
+                time_slots.append({
+                    "start_time": slot_start.strftime('%H:%M'),
+                    "end_time": slot_end.strftime('%H:%M'),
+                    "status": status_display,
+                    "is_selectable": is_selectable,
+                    "is_in_selected_block": is_in_selected_block,
+                    "block_start": block_start,
+                    "block_end": block_end,
+                    "blocking_reservation": blocking_reservation
+                })
 
-        except ValueError:
-            return Response(
-                {
-                    "status": "error",
-                    "message": "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)",
-                    "code": "INVALID_DATE_FORMAT"
+                current_datetime = slot_end
+
+            response_data = {
+                "date": date_str,
+                "memorial_room_id": memorial_room.id,
+                "operating_hours": {
+                    "start": start_time_str.strip(),
+                    "end": end_time_str.strip()
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                "selected_time": selected_time,
+                "time_slots": time_slots
+            }
+
+            return Response({"data": response_data})
+
+        except Exception as e:
+            logger.error(f"Error in available_times: {str(e)}")
+            return Response(
+                {"error": "서버 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     @action(detail=False, methods=['post'], url_path='check-availability', url_name='check_availability')

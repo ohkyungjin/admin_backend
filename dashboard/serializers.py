@@ -33,8 +33,19 @@ class MemorialRoomStatusSerializer(serializers.Serializer):
     room_id = serializers.IntegerField()
     room_name = serializers.CharField()
     current_status = serializers.CharField()
-    next_reservation = ReservationListSerializer(allow_null=True)
+    next_reservation = serializers.SerializerMethodField()
     today_reservation_count = serializers.IntegerField()
+    today_reservations = serializers.SerializerMethodField()
+
+    def get_next_reservation(self, obj):
+        if obj.get('next_reservation'):
+            return obj['next_reservation']
+        return None
+
+    def get_today_reservations(self, obj):
+        if obj.get('today_reservations'):
+            return obj['today_reservations']
+        return []
 
 
 class StaffWorkloadSerializer(serializers.Serializer):

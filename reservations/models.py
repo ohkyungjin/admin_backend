@@ -1,12 +1,12 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
-from funeral.models import FuneralPackage
+from funeral.models import FuneralPackage, PremiumLine, AdditionalOption
 from memorial_rooms.models import MemorialRoom
 from django.utils import timezone
 from decimal import Decimal
 from typing import Optional, List, Dict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class Customer(models.Model):
@@ -79,7 +79,6 @@ class Pet(models.Model):
         blank=True, 
         null=True
     )
-    special_notes = models.TextField(_('특이사항'), blank=True)
     created_at = models.DateTimeField(_('생성일'), auto_now_add=True)
     updated_at = models.DateTimeField(_('수정일'), auto_now=True)
 
@@ -152,6 +151,20 @@ class Reservation(models.Model):
         null=True,
         verbose_name=_('장례 패키지')
     )
+    premium_line = models.ForeignKey(
+        PremiumLine,
+        on_delete=models.PROTECT,
+        related_name='reservations',
+        blank=True,
+        null=True,
+        verbose_name=_('프리미엄 라인')
+    )
+    additional_options = models.ManyToManyField(
+        AdditionalOption,
+        related_name='reservations',
+        blank=True,
+        verbose_name=_('추가 옵션')
+    )
     memorial_room = models.ForeignKey(
         MemorialRoom, 
         on_delete=models.PROTECT,
@@ -163,6 +176,9 @@ class Reservation(models.Model):
 
     # 예약 상태 및 일정
     scheduled_at = models.DateTimeField(_('예약일시'), blank=True, null=True)
+    completed_at = models.DateTimeField(_('완료일시'), blank=True, null=True)
+    is_blocked = models.BooleanField(_('블록 처리 여부'), default=False)
+    block_end_time = models.DateTimeField(_('블록 종료 시간'), blank=True, null=True)
     status = models.CharField(
         _('상태'), 
         max_length=20, 
@@ -189,7 +205,7 @@ class Reservation(models.Model):
     )
     referral_hospital = models.CharField(_('경유병원'), max_length=100, blank=True)
     need_death_certificate = models.BooleanField(_('장례확인서필요여부'), default=False)
-    custom_requests = models.TextField(_('요청사항'), blank=True)
+    memo = models.TextField(_('메모'), blank=True)
 
     # 생성/수정 정보
     created_by = models.ForeignKey(
@@ -240,10 +256,23 @@ class Reservation(models.Model):
             models.Index(fields=['status', 'scheduled_at']),
             models.Index(fields=['customer', 'status']),
             models.Index(fields=['assigned_staff', 'status']),
+            models.Index(fields=['is_blocked', 'block_end_time']),
+            models.Index(fields=['completed_at']),
         ]
 
     def __str__(self) -> str:
         return f"{self.customer.name} - {self.pet.name} ({self.get_status_display()})"
+
+    def save(self, *args, **kwargs):
+        # 상태가 완료로 변경될 때 completed_at 설정
+        if self.status == self.STATUS_COMPLETED and not self.completed_at:
+            self.completed_at = timezone.now()
+            
+            # 완료 시 2시간 동안 블록 처리
+            self.is_blocked = True
+            self.block_end_time = self.scheduled_at + timedelta(hours=2)
+            
+        super().save(*args, **kwargs)
 
     def calculate_penalty_amount(self) -> Decimal:
         """취소 시점에 따른 위약금을 계산합니다."""

@@ -200,12 +200,15 @@ TELEGRAM_CHAT_ID = '1193007491'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://192.168.0.7:3000",
+    "http://172.30.48.1:3000",
 ]
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True  # 개발 환경에서만 사용하세요
 
 # Debug toolbar settings
 INTERNAL_IPS = [
-    "127.0.0.1",
+    "127.0.0.1","192.168.0.7", "172.30.48.1"
 ]
 
 # Cache settings
