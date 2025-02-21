@@ -3,12 +3,17 @@ from django.db import transaction
 from django.conf import settings
 from typing import Dict, Any
 
-from .models import Customer, Pet, MemorialRoom, Reservation, ReservationHistory
+from .models import (
+    Customer, Pet, MemorialRoom, Reservation,
+    ReservationHistory, ReservationInventoryItem
+)
 from funeral.models import FuneralPackage, PremiumLine, AdditionalOption
 from funeral.serializers import FuneralPackageSerializer
 from accounts.serializers import UserSerializer
 from accounts.models import User
 from memorial_rooms.models import MemorialRoom as MemorialRoomModel
+from inventory.models import InventoryItem
+from inventory.serializers import InventoryItemSerializer
 
 
 class CustomerSerializer(serializers.ModelSerializer):
@@ -162,6 +167,15 @@ class SimpleFuneralPackageSerializer(FuneralPackageSerializer):
         fields = ['id', 'name', 'base_price', 'is_active']
 
 
+class ReservationInventoryItemSerializer(serializers.ModelSerializer):
+    """예약에 사용된 재고 아이템 시리얼라이저"""
+    inventory_item_detail = InventoryItemSerializer(source='inventory_item', read_only=True)
+    
+    class Meta:
+        model = ReservationInventoryItem
+        fields = ['id', 'inventory_item', 'inventory_item_detail', 'quantity']
+
+
 class ReservationDetailSerializer(serializers.ModelSerializer):
     """예약 상세 정보 시리얼라이저"""
     customer = CustomerSerializer(read_only=True)
@@ -176,6 +190,7 @@ class ReservationDetailSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     visit_route_display = serializers.CharField(source='get_visit_route_display', read_only=True)
     histories = ReservationHistorySerializer(many=True, read_only=True)
+    inventory_items_used = ReservationInventoryItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = Reservation
@@ -187,7 +202,7 @@ class ReservationDetailSerializer(serializers.ModelSerializer):
             'visit_route_display', 'referral_hospital',
             'need_death_certificate', 'memo',
             'created_by', 'created_at', 'updated_at',
-            'histories'
+            'histories', 'inventory_items_used'
         ]
 
     def get_status_choices(self, obj) -> list:
@@ -233,6 +248,11 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    inventory_items = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        write_only=True
+    )
 
     class Meta:
         model = Reservation
@@ -241,7 +261,8 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
             'premium_line_id', 'additional_option_ids',
             'scheduled_at', 'assigned_staff_id', 'is_emergency',
             'visit_route', 'referral_hospital',
-            'need_death_certificate', 'memo', 'created_by'
+            'need_death_certificate', 'memo', 'created_by',
+            'inventory_items'
         ]
 
     def validate_memorial_room_id(self, value):
@@ -258,6 +279,7 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
         memorial_room_id = validated_data.pop('memorial_room_id')
         additional_options = validated_data.pop('additional_options', [])
         memo = validated_data.pop('memo', '')
+        inventory_items_data = validated_data.pop('inventory_items', [])
 
         try:
             memorial_room = MemorialRoomModel.objects.get(id=memorial_room_id)
@@ -298,6 +320,27 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
                 changed_by=self.context['request'].user,
                 notes=f'예약 생성 (접수자: {self.context["request"].user.name})'
             )
+
+            # 재고 아이템 연결
+            for item_data in inventory_items_data:
+                try:
+                    inventory_item = InventoryItem.objects.get(id=item_data['inventory_item_id'])
+                    quantity = item_data['quantity']
+                    
+                    # 재고 수량 확인
+                    if inventory_item.current_stock < quantity:
+                        raise serializers.ValidationError(
+                            f"재고 부족: {inventory_item.name}의 현재 재고({inventory_item.current_stock})가 "
+                            f"요청 수량({quantity})보다 적습니다."
+                        )
+                    
+                    ReservationInventoryItem.objects.create(
+                        reservation=reservation,
+                        inventory_item=inventory_item,
+                        quantity=quantity
+                    )
+                except InventoryItem.DoesNotExist:
+                    raise serializers.ValidationError(f"존재하지 않는 재고 아이템 ID: {item_data['inventory_item_id']}")
 
             return reservation
 
@@ -354,6 +397,7 @@ class ReservationUpdateSerializer(serializers.ModelSerializer):
         pet_data = validated_data.pop('pet', None)
         memorial_room_id = validated_data.pop('memorial_room_id', None)
         additional_options = validated_data.pop('additional_options', None)
+        inventory_items_data = validated_data.pop('inventory_items', [])
 
         # 고객 정보 업데이트
         if customer_data:
@@ -397,5 +441,29 @@ class ReservationUpdateSerializer(serializers.ModelSerializer):
                     changed_by=self.context['request'].user,
                     notes='예약 상태 변경'
                 )
+
+            # 기존 재고 아이템 연결 삭제
+            instance.inventory_items_used.all().delete()
+            
+            # 새로운 재고 아이템 연결
+            for item_data in inventory_items_data:
+                try:
+                    inventory_item = InventoryItem.objects.get(id=item_data['inventory_item_id'])
+                    quantity = item_data['quantity']
+                    
+                    # 재고 수량 확인
+                    if inventory_item.current_stock < quantity:
+                        raise serializers.ValidationError(
+                            f"재고 부족: {inventory_item.name}의 현재 재고({inventory_item.current_stock})가 "
+                            f"요청 수량({quantity})보다 적습니다."
+                        )
+                    
+                    ReservationInventoryItem.objects.create(
+                        reservation=instance,
+                        inventory_item=inventory_item,
+                        quantity=quantity
+                    )
+                except InventoryItem.DoesNotExist:
+                    raise serializers.ValidationError(f"존재하지 않는 재고 아이템 ID: {item_data['inventory_item_id']}")
 
             return instance 

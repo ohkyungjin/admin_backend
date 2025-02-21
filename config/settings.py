@@ -191,6 +191,22 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
+    
+    # 권한별 토큰 유효기간 설정
+    'AUTH_LEVEL_TOKEN_LIFETIMES': {
+        'SUPERADMIN': {
+            'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
+            'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+        },
+        'ADMIN': {
+            'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
+            'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+        },
+        'INSTRUCTOR': {
+            'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
+            'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
+        },
+    }
 }
 #Telegram 전송
 TELEGRAM_BOT_TOKEN = 'bot6197488892:AAEiIIb-8W5UQTILtELZOxcjN9d99VMwsFs'

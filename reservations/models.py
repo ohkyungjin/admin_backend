@@ -248,6 +248,14 @@ class Reservation(models.Model):
         default='pending'
     )
 
+    # 재고 관련 필드 추가
+    inventory_items = models.ManyToManyField(
+        'inventory.InventoryItem',
+        through='ReservationInventoryItem',
+        related_name='reservations',
+        verbose_name=_('사용된 재고')
+    )
+
     class Meta:
         verbose_name = _('예약')
         verbose_name_plural = _('예약 목록')
@@ -264,15 +272,36 @@ class Reservation(models.Model):
         return f"{self.customer.name} - {self.pet.name} ({self.get_status_display()})"
 
     def save(self, *args, **kwargs):
-        # 상태가 완료로 변경될 때 completed_at 설정
-        if self.status == self.STATUS_COMPLETED and not self.completed_at:
-            self.completed_at = timezone.now()
-            
-            # 완료 시 2시간 동안 블록 처리
-            self.is_blocked = True
-            self.block_end_time = self.scheduled_at + timedelta(hours=2)
-            
+        is_status_completed = False
+        if self.pk:
+            old_instance = Reservation.objects.get(pk=self.pk)
+            if old_instance.status != self.STATUS_COMPLETED and self.status == self.STATUS_COMPLETED:
+                is_status_completed = True
+
         super().save(*args, **kwargs)
+
+        # 상태가 완료로 변경될 때 재고 처리
+        if is_status_completed:
+            self.process_inventory_usage()
+
+    def process_inventory_usage(self):
+        """예약 완료 시 사용된 재고를 처리합니다."""
+        from inventory.models import StockMovement
+        
+        for item_usage in self.inventory_items_used.all():
+            # 재고 감소 처리
+            stock_movement = StockMovement.objects.create(
+                item=item_usage.inventory_item,
+                quantity=-item_usage.quantity,  # 음수로 처리하여 재고 감소
+                movement_type='usage',
+                reference_number=f'RSV-{self.id}',
+                notes=f'예약 {self.id} 완료에 따른 재고 사용'
+            )
+            
+            # 재고 수량 업데이트
+            item = item_usage.inventory_item
+            item.current_stock -= item_usage.quantity
+            item.save()
 
     def calculate_penalty_amount(self) -> Decimal:
         """취소 시점에 따른 위약금을 계산합니다."""
@@ -378,3 +407,27 @@ class MemorialRoom(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.get_current_status_display()})"
+
+
+# 예약에 사용된 재고 아이템을 관리하는 중간 모델
+class ReservationInventoryItem(models.Model):
+    reservation = models.ForeignKey(
+        Reservation,
+        on_delete=models.CASCADE,
+        related_name='inventory_items_used'
+    )
+    inventory_item = models.ForeignKey(
+        'inventory.InventoryItem',
+        on_delete=models.PROTECT,
+        related_name='reservation_usages'
+    )
+    quantity = models.PositiveIntegerField(_('사용 수량'))
+    created_at = models.DateTimeField(_('생성일'), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('예약 사용 재고')
+        verbose_name_plural = _('예약 사용 재고 목록')
+        unique_together = ['reservation', 'inventory_item']
+
+    def __str__(self):
+        return f"{self.reservation} - {self.inventory_item} ({self.quantity}개)"

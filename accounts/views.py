@@ -12,6 +12,8 @@ from .serializers import (
     UserSerializer, UserCreateSerializer, UserUpdateSerializer,
     PasswordChangeSerializer, ActivityLogSerializer
 )
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.conf import settings
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -194,3 +196,56 @@ class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(action_type=action_type)
             
         return queryset
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        
+        if response.status_code == 200:
+            # 사용자 정보 조회
+            user = User.objects.get(email=request.data['email'])
+            
+            # 권한 레벨에 따른 토큰 유효기간 설정
+            auth_level_map = {
+                User.LEVEL_SUPERADMIN: 'SUPERADMIN',
+                User.LEVEL_ADMIN: 'ADMIN',
+                User.LEVEL_INSTRUCTOR: 'INSTRUCTOR',
+            }
+            
+            auth_level = auth_level_map.get(user.auth_level)
+            if auth_level and auth_level in settings.SIMPLE_JWT['AUTH_LEVEL_TOKEN_LIFETIMES']:
+                # 새로운 토큰 생성
+                refresh = RefreshToken.for_user(user)
+                
+                # 토큰 유효기간 설정
+                token_settings = settings.SIMPLE_JWT['AUTH_LEVEL_TOKEN_LIFETIMES'][auth_level]
+                refresh.set_exp(lifetime=token_settings['REFRESH_TOKEN_LIFETIME'])
+                refresh.access_token.set_exp(lifetime=token_settings['ACCESS_TOKEN_LIFETIME'])
+                
+                # 추가 클레임 설정
+                refresh['auth_level'] = user.auth_level
+                refresh.access_token['auth_level'] = user.auth_level
+                
+                response.data = {
+                    'access': str(refresh.access_token),
+                    'refresh': str(refresh),
+                    'user': {
+                        'id': user.id,
+                        'email': user.email,
+                        'name': user.name,
+                        'auth_level': user.auth_level,
+                        'auth_level_display': user.get_auth_level_display(),
+                        'department': user.department,
+                        'position': user.position,
+                    }
+                }
+            
+            # 로그인 이력 기록
+            ActivityLog.objects.create(
+                user=user,
+                action_type='login',
+                description=f'로그인 (권한: {user.get_auth_level_display()})',
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+        
+        return response
