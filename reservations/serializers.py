@@ -240,7 +240,7 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
         many=True,
         required=False
     )
-    memorial_room_id = serializers.IntegerField(required=True)
+    memorial_room_id = serializers.IntegerField(required=False, allow_null=True)
     assigned_staff_id = serializers.PrimaryKeyRelatedField(
         source='assigned_staff',
         queryset=User.objects.all(),
@@ -276,15 +276,10 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data: Dict[str, Any]) -> Reservation:
         customer_data = validated_data.pop('customer')
         pet_data = validated_data.pop('pet')
-        memorial_room_id = validated_data.pop('memorial_room_id')
+        memorial_room_id = validated_data.pop('memorial_room_id', None)
         additional_options = validated_data.pop('additional_options', [])
         memo = validated_data.pop('memo', '')
         inventory_items_data = validated_data.pop('inventory_items', [])
-
-        try:
-            memorial_room = MemorialRoomModel.objects.get(id=memorial_room_id)
-        except MemorialRoomModel.DoesNotExist:
-            raise serializers.ValidationError({"memorial_room_id": "존재하지 않는 추모실입니다."})
 
         with transaction.atomic():
             # 고객 생성 또는 조회
@@ -302,9 +297,16 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
                 'pet': pet,
                 'created_by': self.context['request'].user,
                 'status': Reservation.STATUS_PENDING,
-                'memorial_room': memorial_room,
                 'memo': memo
             })
+            
+            # 추모실이 지정된 경우에만 추가
+            if memorial_room_id:
+                try:
+                    memorial_room = MemorialRoomModel.objects.get(id=memorial_room_id)
+                    validated_data['memorial_room'] = memorial_room
+                except MemorialRoomModel.DoesNotExist:
+                    pass
             
             reservation = Reservation.objects.create(**validated_data)
 
@@ -352,7 +354,8 @@ class ReservationUpdateSerializer(serializers.ModelSerializer):
     package_id = serializers.PrimaryKeyRelatedField(
         source='package',
         queryset=FuneralPackage.objects.all(),
-        required=False
+        required=False,
+        allow_null=True
     )
     premium_line_id = serializers.PrimaryKeyRelatedField(
         source='premium_line',
@@ -366,7 +369,7 @@ class ReservationUpdateSerializer(serializers.ModelSerializer):
         many=True,
         required=False
     )
-    memorial_room_id = serializers.IntegerField(required=False)
+    memorial_room_id = serializers.IntegerField(required=False, allow_null=True)
     assigned_staff_id = serializers.PrimaryKeyRelatedField(
         source='assigned_staff',
         queryset=User.objects.all(),

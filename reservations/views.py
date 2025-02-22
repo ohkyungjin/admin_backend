@@ -78,6 +78,33 @@ class MemorialRoomViewSet(viewsets.ModelViewSet):
             )
 
 
+def validate_memorial_room(memorial_room_id: int) -> MemorialRoom:
+    """추모실 ID 유효성 검사 및 객체 반환"""
+    try:
+        room = MemorialRoom.objects.get(id=memorial_room_id)
+        if not room.is_active:
+            raise ValueError("해당 추모실은 현재 사용할 수 없습니다.")
+        return room
+    except MemorialRoom.DoesNotExist:
+        raise ValueError("존재하지 않는 추모실입니다.")
+
+def handle_memorial_room_validation(memorial_room_id: int) -> tuple[bool, Optional[Response], Optional[MemorialRoom]]:
+    """추모실 검증 처리 및 에러 응답 생성"""
+    try:
+        room = validate_memorial_room(memorial_room_id)
+        return True, None, room
+    except ValueError as e:
+        error_response = Response(
+            {
+                "status": "error",
+                "status_code": 400,
+                "errors": {"memorial_room_id": [str(e)]}
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+        return False, error_response, None
+
+
 class ReservationViewSet(viewsets.ModelViewSet):
     """예약 관리 ViewSet"""
     queryset = Reservation.objects.all()
@@ -351,60 +378,20 @@ class ReservationViewSet(viewsets.ModelViewSet):
         """예약 생성"""
         memorial_room_id = request.data.get('memorial_room_id')
         if memorial_room_id:
-            try:
-                memorial_room = MemorialRoom.objects.get(id=memorial_room_id)
-                if not memorial_room.is_active:
-                    return Response(
-                        {
-                            "status": "error",
-                            "status_code": 400,
-                            "errors": {
-                                "memorial_room_id": ["해당 추모실은 현재 사용할 수 없습니다."]
-                            }
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except MemorialRoom.DoesNotExist:
-                return Response(
-                    {
-                        "status": "error",
-                        "status_code": 400,
-                        "errors": {
-                            "memorial_room_id": ["존재하지 않는 추모실입니다."]
-                        }
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            is_valid, error_response, room = handle_memorial_room_validation(memorial_room_id)
+            if not is_valid:
+                return error_response
+            
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
         """예약 수정"""
         memorial_room_id = request.data.get('memorial_room_id')
         if memorial_room_id:
-            try:
-                memorial_room = MemorialRoom.objects.get(id=memorial_room_id)
-                if not memorial_room.is_active:
-                    return Response(
-                        {
-                            "status": "error",
-                            "status_code": 400,
-                            "errors": {
-                                "memorial_room_id": ["해당 추모실은 현재 사용할 수 없습니다."]
-                            }
-                        },
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except MemorialRoom.DoesNotExist:
-                return Response(
-                    {
-                        "status": "error",
-                        "status_code": 400,
-                        "errors": {
-                            "memorial_room_id": ["존재하지 않는 추모실입니다."]
-                        }
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            is_valid, error_response, room = handle_memorial_room_validation(memorial_room_id)
+            if not is_valid:
+                return error_response
+
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
@@ -576,57 +563,24 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='check-availability', url_name='check_availability')
     def check_availability(self, request):
-        """예약 시간대 중복 여부를 체크합니다."""
-        memorial_room_id = request.data.get('memorial_room_id')
+        """예약 시간 형식을 검증합니다."""
         scheduled_at = request.data.get('scheduled_at')
         duration_hours = request.data.get('duration_hours', 2)
 
-        if not all([memorial_room_id, scheduled_at]):
+        if not scheduled_at:
             return Response(
-                {"error": "추모실 ID와 예약 시간은 필수입니다."},
+                {"error": "예약 시간은 필수입니다."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            # 추모실 존재 여부 확인
-            try:
-                memorial_room = MemorialRoom.objects.get(id=memorial_room_id)
-                if not memorial_room.is_active:
-                    return Response(
-                        {"error": "해당 추모실은 현재 사용할 수 없습니다."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except MemorialRoom.DoesNotExist:
-                return Response(
-                    {"error": "존재하지 않는 추모실입니다."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
             scheduled_dt = timezone.datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
             end_dt = scheduled_dt + timedelta(hours=duration_hours)
 
-            # 중복 예약 체크
-            conflicting_reservation = Reservation.objects.filter(
-                memorial_room_id=memorial_room_id,
-                scheduled_at__lt=end_dt,
-                status__in=['pending', 'confirmed', 'in_progress']
-            ).filter(
-                scheduled_at__gt=scheduled_dt - timedelta(hours=duration_hours)
-            ).first()
-
-            if conflicting_reservation:
-                return Response({
-                    "is_available": False,
-                    "conflicting_reservation": {
-                        "id": conflicting_reservation.id,
-                        "scheduled_at": conflicting_reservation.scheduled_at,
-                        "duration_hours": duration_hours
-                    }
-                })
-
             return Response({
-                "is_available": True,
-                "conflicting_reservation": None
+                "is_valid": True,
+                "scheduled_at": scheduled_dt,
+                "end_at": end_dt
             })
 
         except ValueError as e:
