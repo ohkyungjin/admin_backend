@@ -130,6 +130,12 @@ class Reservation(models.Model):
         ('failed', '실패'),
     ]
 
+    DISCOUNT_TYPE_CHOICES = [
+        ('percent', '정률'),
+        ('fixed', '정액'),
+        (None, '없음'),
+    ]
+
     # 기본 정보
     customer = models.ForeignKey(
         Customer, 
@@ -206,6 +212,31 @@ class Reservation(models.Model):
     referral_hospital = models.CharField(_('경유병원'), max_length=100, blank=True)
     need_death_certificate = models.BooleanField(_('장례확인서필요여부'), default=False)
     memo = models.TextField(_('메모'), blank=True)
+
+    # 금액 관련 필드 추가
+    weight_surcharge = models.DecimalField(
+        _('무게 할증료'),
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text='무게로 인한 추가 요금'
+    )
+    discount_type = models.CharField(
+        _('할인 유형'),
+        max_length=10,
+        choices=DISCOUNT_TYPE_CHOICES,
+        null=True,
+        blank=True,
+        help_text='할인 유형 (정률/정액)'
+    )
+    discount_value = models.DecimalField(
+        _('할인 값'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='할인율(%) 또는 할인금액'
+    )
 
     # 생성/수정 정보
     created_by = models.ForeignKey(

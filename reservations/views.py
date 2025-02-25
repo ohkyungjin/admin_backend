@@ -589,3 +589,54 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 {"error": "날짜/시간 형식이 올바르지 않습니다."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+    @action(detail=True, methods=['patch'], url_path='update-payment-info')
+    def update_payment_info(self, request, pk=None):
+        """예약의 결제 관련 정보(할증료, 할인)를 업데이트합니다."""
+        reservation = self.get_object()
+        
+        try:
+            with transaction.atomic():
+                # 결제 정보 업데이트
+                weight_surcharge = request.data.get('weight_surcharge')
+                if weight_surcharge is not None:
+                    reservation.weight_surcharge = weight_surcharge
+
+                discount_type = request.data.get('discount_type')
+                if discount_type is not None:
+                    if discount_type not in dict(Reservation.DISCOUNT_TYPE_CHOICES):
+                        return Response(
+                            {"error": "올바르지 않은 할인 유형입니다."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    reservation.discount_type = discount_type
+
+                discount_value = request.data.get('discount_value')
+                if discount_value is not None:
+                    if discount_type == 'percent' and float(discount_value) > 100:
+                        return Response(
+                            {"error": "할인율은 100%를 초과할 수 없습니다."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    reservation.discount_value = discount_value
+
+                reservation.save()
+
+                # 이력 생성
+                ReservationHistory.objects.create(
+                    reservation=reservation,
+                    from_status=reservation.status,
+                    to_status=reservation.status,
+                    changed_by=request.user,
+                    notes=f'결제 정보 업데이트 (할증료: {weight_surcharge}, 할인: {discount_type} {discount_value})'
+                )
+
+                serializer = ReservationDetailSerializer(reservation)
+                return Response(serializer.data)
+
+        except Exception as e:
+            logger.error(f"Failed to update payment info for reservation {pk}: {str(e)}")
+            return Response(
+                {"error": "결제 정보 업데이트 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

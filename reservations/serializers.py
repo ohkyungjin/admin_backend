@@ -111,6 +111,7 @@ class ReservationListSerializer(serializers.ModelSerializer):
     additional_options = AdditionalOptionSerializer(many=True, read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     visit_route_display = serializers.CharField(source='get_visit_route_display', read_only=True)
+    discount_type_display = serializers.CharField(source='get_discount_type_display', read_only=True)
     assigned_staff = serializers.SerializerMethodField()
     created_by = serializers.SerializerMethodField()
 
@@ -125,6 +126,7 @@ class ReservationListSerializer(serializers.ModelSerializer):
             'is_emergency', 'assigned_staff',
             'visit_route', 'visit_route_display',
             'referral_hospital', 'need_death_certificate', 'memo', 
+            'weight_surcharge', 'discount_type', 'discount_type_display', 'discount_value',
             'created_by', 'created_at'
         ]
 
@@ -189,6 +191,7 @@ class ReservationDetailSerializer(serializers.ModelSerializer):
     created_by = UserSerializer(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     visit_route_display = serializers.CharField(source='get_visit_route_display', read_only=True)
+    discount_type_display = serializers.CharField(source='get_discount_type_display', read_only=True)
     histories = ReservationHistorySerializer(many=True, read_only=True)
     inventory_items_used = ReservationInventoryItemSerializer(many=True, read_only=True)
 
@@ -201,6 +204,7 @@ class ReservationDetailSerializer(serializers.ModelSerializer):
             'assigned_staff', 'is_emergency', 'visit_route',
             'visit_route_display', 'referral_hospital',
             'need_death_certificate', 'memo',
+            'weight_surcharge', 'discount_type', 'discount_type_display', 'discount_value',
             'created_by', 'created_at', 'updated_at',
             'histories', 'inventory_items_used'
         ]
@@ -253,6 +257,23 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
         required=False,
         write_only=True
     )
+    weight_surcharge = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        default=0
+    )
+    discount_type = serializers.ChoiceField(
+        choices=Reservation.DISCOUNT_TYPE_CHOICES,
+        required=False,
+        allow_null=True
+    )
+    discount_value = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = Reservation
@@ -262,7 +283,8 @@ class ReservationCreateSerializer(serializers.ModelSerializer):
             'scheduled_at', 'assigned_staff_id', 'is_emergency',
             'visit_route', 'referral_hospital',
             'need_death_certificate', 'memo', 'created_by',
-            'inventory_items'
+            'inventory_items', 'weight_surcharge',
+            'discount_type', 'discount_value'
         ]
 
     def validate_memorial_room_id(self, value):
@@ -376,6 +398,22 @@ class ReservationUpdateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    weight_surcharge = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False
+    )
+    discount_type = serializers.ChoiceField(
+        choices=Reservation.DISCOUNT_TYPE_CHOICES,
+        required=False,
+        allow_null=True
+    )
+    discount_value = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = Reservation
@@ -384,7 +422,8 @@ class ReservationUpdateSerializer(serializers.ModelSerializer):
             'premium_line_id', 'additional_option_ids',
             'scheduled_at', 'assigned_staff_id', 'is_emergency',
             'visit_route', 'referral_hospital',
-            'need_death_certificate', 'memo'
+            'need_death_certificate', 'memo',
+            'weight_surcharge', 'discount_type', 'discount_value'
         ]
 
     def validate_memorial_room_id(self, value):

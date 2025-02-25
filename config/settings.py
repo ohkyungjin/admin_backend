@@ -102,6 +102,12 @@ DATABASES = {
     }
 }
 
+# MySQL 성능 최적화 설정
+CONN_MAX_AGE = 60
+
+# 시간대 설정
+USE_TZ = True
+TIME_ZONE = 'Asia/Seoul'
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -130,12 +136,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'ko-kr'
 
-TIME_ZONE = 'Asia/Seoul'
-
 USE_I18N = True
-
-USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
