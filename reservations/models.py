@@ -5,8 +5,6 @@ from funeral.models import FuneralPackage, PremiumLine, AdditionalOption
 from memorial_rooms.models import MemorialRoom
 from django.utils import timezone
 from decimal import Decimal
-from typing import Optional, List, Dict
-from datetime import datetime, timedelta
 
 
 class Customer(models.Model):

@@ -1,5 +1,4 @@
-from django.shortcuts import render
-from rest_framework import viewsets, status, filters
+from rest_framework import viewsets, status, filters, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -8,13 +7,13 @@ from django.db.models import F
 from django.utils import timezone
 from .models import (
     Category, Supplier, InventoryItem, StockMovement,
-    PurchaseOrder, PurchaseOrderItem, PurchaseOrderHistory
+    PurchaseOrder, PurchaseOrderHistory
 )
 from .serializers import (
     CategorySerializer, SupplierSerializer, InventoryItemSerializer,
     StockMovementSerializer, PurchaseOrderListSerializer,
     PurchaseOrderDetailSerializer, PurchaseOrderCreateSerializer,
-    PurchaseOrderUpdateSerializer, PurchaseOrderItemSerializer
+    PurchaseOrderUpdateSerializer
 )
 from utils.telegram import send_telegram_message, format_purchase_order_message
 import logging

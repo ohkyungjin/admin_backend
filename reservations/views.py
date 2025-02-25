@@ -1,4 +1,3 @@
-from django.shortcuts import render
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -8,9 +7,9 @@ from django.utils import timezone
 from django.db import transaction
 from django.db.models import QuerySet
 import logging
-from datetime import datetime, timedelta, date, time
+from datetime import datetime, timedelta, time
 import pytz
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, List, Optional
 from .models import (
     Customer, Pet, Reservation, ReservationHistory
 )
