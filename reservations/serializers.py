@@ -21,6 +21,10 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = ['id', 'name', 'phone', 'email', 'address', 'created_at']
+        extra_kwargs = {
+            'email': {'required': False},
+            'address': {'required': False}
+        }
 
 
 class PetListSerializer(serializers.ModelSerializer):
@@ -43,19 +47,30 @@ class PetSerializer(serializers.ModelSerializer):
     gender_display = serializers.CharField(source='get_gender_display', read_only=True)
     customer = CustomerSerializer(read_only=True)
     customer_id = serializers.PrimaryKeyRelatedField(
+        source='customer',
         queryset=Customer.objects.all(),
-        write_only=True,
         required=False,
-        source='customer'
+        allow_null=True
     )
 
     class Meta:
         model = Pet
         fields = [
-            'id', 'customer', 'customer_id', 'name', 'species', 'breed', 'age', 
-            'weight', 'death_date', 'death_reason', 'death_reason_display',
-            'gender', 'gender_display', 'is_neutered', 'created_at'
+            'id', 'customer', 'customer_id', 'name', 'species', 'breed',
+            'age', 'weight', 'gender', 'gender_display', 'is_neutered',
+            'death_date', 'death_reason', 'death_reason_display',
+            'created_at', 'updated_at'
         ]
+        extra_kwargs = {
+            'species': {'required': False},
+            'breed': {'required': False},
+            'age': {'required': False},
+            'weight': {'required': False},
+            'gender': {'required': False},
+            'is_neutered': {'required': False},
+            'death_date': {'required': False},
+            'death_reason': {'required': False}
+        }
 
 
 class MemorialRoomSerializer(serializers.ModelSerializer):

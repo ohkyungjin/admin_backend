@@ -12,8 +12,8 @@ class Customer(models.Model):
     """고객 정보를 관리하는 모델"""
     name = EncryptedCharField(_('고객명'), max_length=100)
     phone = EncryptedCharField(_('전화번호'), max_length=20)
-    email = EncryptedEmailField(_('이메일'), blank=True)
-    address = EncryptedTextField(_('주소'), blank=True)
+    email = EncryptedEmailField(_('이메일'), blank=True, null=True)
+    address = EncryptedTextField(_('주소'), blank=True, null=True)
     created_at = models.DateTimeField(_('생성일'), auto_now_add=True)
     updated_at = models.DateTimeField(_('수정일'), auto_now=True)
 
@@ -52,7 +52,7 @@ class Pet(models.Model):
     )
     name = EncryptedCharField(_('반려동물명'), max_length=100)
     species = EncryptedCharField(_('종'), max_length=50, blank=True, null=True)
-    breed = EncryptedCharField(_('품종'), max_length=100, blank=True)
+    breed = EncryptedCharField(_('품종'), max_length=100, blank=True, null=True)
     age = models.IntegerField(_('나이'), blank=True, null=True)
     weight = models.DecimalField(
         _('체중'), 
