@@ -5,14 +5,15 @@ from funeral.models import FuneralPackage, PremiumLine, AdditionalOption
 from memorial_rooms.models import MemorialRoom
 from django.utils import timezone
 from decimal import Decimal
+from .fields import EncryptedCharField, EncryptedTextField, EncryptedEmailField
 
 
 class Customer(models.Model):
     """고객 정보를 관리하는 모델"""
-    name = models.CharField(_('고객명'), max_length=100)
-    phone = models.CharField(_('전화번호'), max_length=20)
-    email = models.EmailField(_('이메일'), blank=True)
-    address = models.TextField(_('주소'), blank=True)
+    name = EncryptedCharField(_('고객명'), max_length=100)
+    phone = EncryptedCharField(_('전화번호'), max_length=20)
+    email = EncryptedEmailField(_('이메일'), blank=True)
+    address = EncryptedTextField(_('주소'), blank=True)
     created_at = models.DateTimeField(_('생성일'), auto_now_add=True)
     updated_at = models.DateTimeField(_('수정일'), auto_now=True)
 
@@ -21,12 +22,11 @@ class Customer(models.Model):
         verbose_name_plural = _('고객 목록')
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['phone']),
-            models.Index(fields=['name', 'phone']),
+            models.Index(fields=['-created_at']),
         ]
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.phone})"
+        return f"고객 {self.id}"  # 보안을 위해 ID만 표시
 
 
 class Pet(models.Model):
@@ -50,9 +50,9 @@ class Pet(models.Model):
         related_name='pets',
         verbose_name=_('고객')
     )
-    name = models.CharField(_('반려동물명'), max_length=100)
-    species = models.CharField(_('종'), max_length=50, blank=True, null=True)
-    breed = models.CharField(_('품종'), max_length=100, blank=True)
+    name = EncryptedCharField(_('반려동물명'), max_length=100)
+    species = EncryptedCharField(_('종'), max_length=50, blank=True, null=True)
+    breed = EncryptedCharField(_('품종'), max_length=100, blank=True)
     age = models.IntegerField(_('나이'), blank=True, null=True)
     weight = models.DecimalField(
         _('체중'), 
@@ -85,12 +85,11 @@ class Pet(models.Model):
         verbose_name_plural = _('반려동물 목록')
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['customer', 'name']),
-            models.Index(fields=['death_date']),
+            models.Index(fields=['-created_at']),
         ]
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.species or '종류 미상'})"
+        return f"반려동물 {self.id}"  # 보안을 위해 ID만 표시
 
 
 class Reservation(models.Model):

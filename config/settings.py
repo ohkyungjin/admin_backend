@@ -13,6 +13,11 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import os
+from cryptography.fernet import Fernet
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -291,4 +296,9 @@ LOGGING = {
 # 로그 파일 저장 디렉토리 생성
 if not os.path.exists(BASE_DIR / 'logs'):
     os.makedirs(BASE_DIR / 'logs')
+
+# 암호화 키 설정 (환경 변수에서 가져옴)
+ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY').encode()
+if not ENCRYPTION_KEY:
+    raise ValueError('ENCRYPTION_KEY must be set in .env file')
 

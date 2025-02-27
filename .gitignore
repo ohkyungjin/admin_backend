@@ -32,6 +32,7 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 media/
+staticfiles/
 
 # VS Code
 .vscode/
@@ -59,3 +60,14 @@ htmlcov/
 .coverage.*
 coverage.xml
 *.cover
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
